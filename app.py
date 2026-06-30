@@ -77,16 +77,16 @@ def extract_m4cu(df):
             continue
         
         alamat = " ".join([
-            str(row[COL_CUADR1]).strip() if len(row) > COL_CUADR1 else "",
-            str(row[COL_CUADR2]).strip() if len(row) > COL_CUADR2 else "",
-            str(row[COL_CUADR3]).strip() if len(row) > COL_CUADR3 else ""
+            str(row[COL_CUADR1]).strip() if len(row) > COL_CUADR1 and str(row[COL_CUADR1]).strip() not in ["", "nan"] else "",
+            str(row[COL_CUADR2]).strip() if len(row) > COL_CUADR2 and str(row[COL_CUADR2]).strip() not in ["", "nan"] else "",
+            str(row[COL_CUADR3]).strip() if len(row) > COL_CUADR3 and str(row[COL_CUADR3]).strip() not in ["", "nan"] else ""
         ]).strip()
         
         jenis = str(row[COL_CUFLTY]).strip() if len(row) > COL_CUFLTY else ""
         
         result[cif] = {
             "cif": cif,
-            "nama": str(row[COL_CUNAME]).strip() if len(row) > COL_CUNAME else "-",
+            "nama": str(row[COL_CUNAME]).strip() if len(row) > COL_CUNAME and str(row[COL_CUNAME]).strip() not in ["", "nan"] else "-",
             "jenis_nasabah": jenis if jenis not in ["", "nan"] else "",
             "alamat": alamat if alamat else "-",
             "pekerjaan": str(row[COL_CUKRJA]).strip() if len(row) > COL_CUKRJA and str(row[COL_CUKRJA]).strip() not in ["", "nan"] else "-",
@@ -135,7 +135,7 @@ def extract_m4cui(df, existing_data):
             continue
         
         if cif in existing_data:
-            # Nama (prioritas CUNAME, fallback CUSHOR)
+            # Nama
             if len(row) > COL_CUNAME:
                 val = str(row[COL_CUNAME]).strip()
                 if val not in ["", "nan"]:
@@ -218,7 +218,7 @@ def extract_m4cuapu(df, existing_data):
             if val not in ["", "nan"]:
                 existing_data[cif]["tujuan_usaha"] = get_best_value([existing_data[cif]["tujuan_usaha"], val])
         
-        # JK (prioritas dari M4CUAPU)
+        # JK
         if len(row) > COL_JK:
             val = str(row[COL_JK]).strip()
             if val not in ["", "nan"]:
@@ -230,7 +230,7 @@ def extract_m4cuapu(df, existing_data):
             if val not in ["", "nan"]:
                 existing_data[cif]["tempat_lahir"] = val
         
-        # Tgl Lahir (prioritas dari M4CUAPU)
+        # Tgl Lahir
         if len(row) > COL_TGL_LAHIR:
             val = str(row[COL_TGL_LAHIR]).strip()
             if val not in ["", "nan"]:
@@ -324,8 +324,13 @@ def generate_template(data):
         }
         
         for key in default:
-            if key not in d:
+            if key not in d or d[key] in ["", "nan", "None"]:
                 d[key] = default[key]
+        
+        # Bersihkan nilai yang masih "nan"
+        for key in d:
+            if d[key] in ["nan", "None", ""]:
+                d[key] = "-"
         
         jenis = d.get("jenis_nasabah", "").strip().upper()
         
