@@ -28,7 +28,26 @@ if "processed_data" not in st.session_state:
     st.session_state.processed_data = None
 
 # ============================================================
-# 3. UI UTAMA
+# 3. FUNGSI BANTUAN UNTUK PREVIEW
+# ============================================================
+def make_unique_headers(headers):
+    """Bikin header unik dengan nambahin suffix kalau ada duplikat"""
+    seen = {}
+    unique_headers = []
+    for h in headers:
+        h_str = str(h).strip()
+        if not h_str or h_str == "":
+            h_str = "Kolom"
+        if h_str in seen:
+            seen[h_str] += 1
+            unique_headers.append(f"{h_str}_{seen[h_str]}")
+        else:
+            seen[h_str] = 1
+            unique_headers.append(h_str)
+    return unique_headers
+
+# ============================================================
+# 4. UI UTAMA
 # ============================================================
 
 st.subheader("📁 Upload File Data (.tab)")
@@ -53,15 +72,22 @@ if data_files:
             if df is not None and not df.empty:
                 header_info = get_headers_for_file(key)
                 if header_info:
+                    # Pake deskripsi kalau ada, kalo nggak pake kode
                     if header_info.get("deskripsi") and len(header_info["deskripsi"]) > 0 and not all(h == "" for h in header_info["deskripsi"]):
                         headers = header_info["deskripsi"]
                     else:
                         headers = header_info["kode"]
                     
+                    # Potong atau tambah header sesuai jumlah kolom
                     if len(headers) > len(df.columns):
                         headers = headers[:len(df.columns)]
                     elif len(headers) < len(df.columns):
-                        headers = headers + [f"Kolom {i}" for i in range(len(headers), len(df.columns))]
+                        # Tambah kolom baru dengan nama unik
+                        for i in range(len(headers), len(df.columns)):
+                            headers.append(f"Kolom_{i}")
+                    
+                    # Pastikan semua header unik
+                    headers = make_unique_headers(headers)
                     
                     st.session_state.uploaded_files[key] = {
                         "df": df,
@@ -71,7 +97,8 @@ if data_files:
                     }
                     st.success(f"✅ {file.name}: {len(df)} baris, {len(df.columns)} kolom → Match: {key}")
                 else:
-                    headers = [f"Kolom {i}" for i in range(len(df.columns))]
+                    # Tidak ada header, pake default
+                    headers = [f"Kolom_{i}" for i in range(len(df.columns))]
                     st.session_state.uploaded_files[key] = {
                         "df": df,
                         "headers": headers,
@@ -96,8 +123,13 @@ if st.session_state.uploaded_files:
         
         st.write(f"**📋 {file_name}**")
         
+        # Preview 3 baris dengan header unik
         preview_df = df.head(3).copy()
-        preview_df.columns = headers[:len(preview_df.columns)]
+        # Pastikan jumlah header sama dengan jumlah kolom
+        preview_headers = headers[:len(preview_df.columns)]
+        # Pastikan header unik
+        preview_headers = make_unique_headers(preview_headers)
+        preview_df.columns = preview_headers
         st.dataframe(preview_df, use_container_width=True)
         
         col_options = {f"{i}: {h}" : i for i, h in enumerate(headers)}
@@ -166,7 +198,7 @@ if st.session_state.uploaded_files and all(v is not None for v in st.session_sta
                 result_headers = []
                 
                 for col_idx in first_selected_cols:
-                    col_name = first_headers[col_idx] if col_idx < len(first_headers) else f"Kolom {col_idx}"
+                    col_name = first_headers[col_idx] if col_idx < len(first_headers) else f"Kolom_{col_idx}"
                     result_headers.append(col_name)
                     result_data[col_name] = first_df[col_idx].tolist()
                 
@@ -183,8 +215,9 @@ if st.session_state.uploaded_files and all(v is not None for v in st.session_sta
                     other_data = {}
                     
                     for col_idx in selected_cols:
-                        col_name = headers[col_idx] if col_idx < len(headers) else f"Kolom {col_idx}"
+                        col_name = headers[col_idx] if col_idx < len(headers) else f"Kolom_{col_idx}"
                         final_name = f"{info['file_name']}_{col_name}"
+                        # Pastikan nama unik
                         result_headers.append(final_name)
                         other_data[final_name] = df[col_idx].tolist()
                     
