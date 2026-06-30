@@ -340,11 +340,12 @@ if st.session_state.processed_data is not None:
     
     # Bersihin header hasil gabungan pake alias
     from utils import clean_headers
+    from reference import translate_value
+    
     cleaned_columns = clean_headers(st.session_state.processed_data.columns.tolist())
     
     # Pastikan semua kolom unik
     if len(cleaned_columns) != len(set(cleaned_columns)):
-        # Kalo masih ada duplikat, paksa unik
         seen = {}
         final_columns = []
         for col in cleaned_columns:
@@ -358,9 +359,43 @@ if st.session_state.processed_data is not None:
     
     st.session_state.processed_data.columns = cleaned_columns
     
+    # === TRANSLATE VALUE ===
+    # Terjemahkan nilai di setiap kolom berdasarkan nama kolom
+    translate_count = 0
+    for col in st.session_state.processed_data.columns:
+        col_upper = col.upper()
+        need_translate = False
+        
+        # Cek apakah kolom perlu di-translate
+        translate_keywords = [
+            "BRANCH", "CABANG", "CUBRCO", "BRCODE", "KODE CABANG",
+            "PEKERJAAN", "CUKRJA", "JOB", "PROFESI",
+            "STATUS KAWIN", "CUMRST", "MARITAL",
+            "BENTUK USAHA", "BENTUK BADAN",
+            "PENGHASILAN", "INCOME",
+            "AO", "ACCOUNT OFFICER", "CUAOCO",
+            "KRITERIA", "TKM"
+        ]
+        
+        for keyword in translate_keywords:
+            if keyword in col_upper:
+                need_translate = True
+                break
+        
+        if need_translate:
+            translate_count += 1
+            st.session_state.processed_data[col] = st.session_state.processed_data[col].apply(
+                lambda x, c=col: translate_value(c, x) if x != "-" and x != "" and x is not None else "-"
+            )
+    
+    if translate_count > 0:
+        st.info(f"🔄 {translate_count} kolom berhasil diterjemahkan (kode → nama)")
+    
+    # Tampilkan dataframe
     st.dataframe(st.session_state.processed_data, use_container_width=True)
     st.caption(f"Total: {len(st.session_state.processed_data)} baris, {len(st.session_state.processed_data.columns)} kolom")
     
+    # ---- Tombol Download ----
     col1, col2 = st.columns(2)
     
     with col1:
@@ -388,6 +423,18 @@ if st.session_state.processed_data is not None:
             )
         except Exception as e:
             st.info("💡 Excel download tidak tersedia, gunakan CSV")
+
+# ---- Reset ----
+if st.button("🔄 Reset Semua", use_container_width=True):
+    for key in list(st.session_state.keys()):
+        if key not in ["header_mapping"]:
+            if key in ["uploaded_files", "selected_key", "selected_cols"]:
+                st.session_state[key] = {}
+            else:
+                st.session_state[key] = None
+    st.session_state.processed_data = None
+    st.session_state.show_column_selector = False
+    st.rerun()
 
 
 # ---- Reset ----
