@@ -337,6 +337,12 @@ if st.session_state.show_column_selector and st.session_state.uploaded_files and
 # ---- Preview & Download ----
 if st.session_state.processed_data is not None:
     st.subheader("📊 Preview Hasil Gabungan")
+    
+    # Bersihin header hasil gabungan pake alias
+    from utils import clean_headers
+    cleaned_columns = clean_headers(st.session_state.processed_data.columns.tolist())
+    st.session_state.processed_data.columns = cleaned_columns
+    
     st.dataframe(st.session_state.processed_data, use_container_width=True)
     st.caption(f"Total: {len(st.session_state.processed_data)} baris, {len(st.session_state.processed_data.columns)} kolom")
     
@@ -365,8 +371,9 @@ if st.session_state.processed_data is not None:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
-        except:
-            st.info("Excel download tidak tersedia, gunakan CSV")
+        except Exception as e:
+            st.info("💡 Excel download tidak tersedia, gunakan CSV")
+
 
 # ---- Reset ----
 if st.button("🔄 Reset Semua", use_container_width=True):
