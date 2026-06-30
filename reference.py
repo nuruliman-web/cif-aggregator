@@ -2,9 +2,10 @@
 # ============================================================
 # SEMUA REFERENSI DARI FILE MASTER "Kode 012 017 (2).xls"
 # ============================================================
+import re
 
 # ============================================================
-# 1. KODE CABANG (dari sheet TFGEN 012 017)
+# 1. KODE CABANG
 # ============================================================
 CABANG_MAP = {
     "1": "KPO",
@@ -21,7 +22,7 @@ CABANG_MAP = {
 }
 
 # ============================================================
-# 2. KODE PEKERJAAN (dari sheet TFGEN 012 017 + Sheet1)
+# 2. KODE PEKERJAAN
 # ============================================================
 PEKERJAAN_MAP = {
     "0": "LAIN-LAIN",
@@ -59,49 +60,6 @@ PEKERJAAN_MAP = {
     "54": "NOTARIS/PPAT",
     "62": "DOSEN/GURU",
     "9999": "LAIN-LAIN",
-    # Dari Sheet1 (kode 071)
-    "071_1": "PRESIDEN,WAKIL PRESIDEN",
-    "071_2": "MENTERI,WAKIL MENTERI",
-    "071_3": "ANGGOTA MPR,DPR",
-    "071_4": "HAKIM KONSTITUSI",
-    "071_5": "ANGGOTA KOMISI YUDISIAL",
-    "071_6": "AGT DWN PRTIMBANGAN PRESIDEN",
-    "071_7": "ANGT.BADAN PEMERIKSA KEUANGAN",
-    "071_8": "ANGGOTA DEWAN GURBERNUR BI",
-    "071_9": "ANGGOTA DEWAN KOMISIONER OJK",
-    "071_10": "PIMPINAN KPK",
-    "071_11": "KEDUTAAN",
-    "071_12": "GURBERNUR,WAKIL GURBERNUR",
-    "071_13": "ANGGOTA DPRD",
-    "071_14": "PEJABAT ESELON I",
-    "071_15": "PEJABAT ESELON II",
-    "071_16": "PEJABAT LINGKUNGAN TNI/POLRI",
-    "071_17": "PEJABAT BUMN/BUMD",
-    "071_18": "PIMP.PERGURUAN TINGGI NEGERI",
-    "071_19": "JAKSA",
-    "071_20": "PENYIDIK(KEPOLISIAN)",
-    "071_21": "PANITERA PENGADILAN",
-    "071_22": "PIMPINAN & BENDAHARA PROYEK",
-    "071_23": "PJ.SEKT SDM MIGAS & NON MIGAS",
-    "071_24": "KEPALA KTR KMENTRIAN KEUANGAN",
-    "071_25": "PEMERIKSA BEA CUKAI",
-    "071_26": "PEMERIKSA PAJAK",
-    "071_27": "AUDITOR PEMERINTAHAN",
-    "071_28": "PJBT YG MENGELUARKAN PERIJINAN",
-    "071_29": "PJBT,KPALA UNIT PELAYANAN MASY",
-    "071_30": "PEJABAT PEMBUAT REGULASI",
-    "071_31": "BUPATI/WALIKOTA",
-    "071_32": "PNGURUS PARTAI,ANGGOTA PARPOL",
-    "071_33": "KOMISARIS PERUSAHAAN SWASTA",
-    "071_34": "DIREKTUR PERUSAHAAN SWASTA",
-    "071_35": "MANAGER PERUSAHAAN SWASTA",
-    "071_36": "SUPERVISOR PERUSAHAAN SWASTA",
-    "071_37": "STAFF PERUSAHAAN SWASTA",
-    "071_38": "KEPALA OPR. PERUSAHAAN SWASTA",
-    "071_40": "HEAD CUSTOMER SERVICE",
-    "071_41": "PEGAWAI HONORER",
-    "071_42": "ADMINISTRASI",
-    "071_9999": "LAIN-LAIN",
 }
 
 # ============================================================
@@ -133,11 +91,11 @@ BENTUK_USAHA_MAP = {
 # 5. PENGHASILAN
 # ============================================================
 PENGHASILAN_MAP = {
-    "1": "0-2,5juta",
-    "2": "2,5-5juta",
-    "3": "5-10juta",
-    "4": "10-50juta",
-    "5": ">50juta",
+    "1": "0 - 2,5 Juta",
+    "2": "2,5 - 5 Juta",
+    "3": "5 - 10 Juta",
+    "4": "10 - 50 Juta",
+    "5": "> 50 Juta",
 }
 
 # ============================================================
@@ -148,13 +106,13 @@ KRITERIA_TKM_MAP = {
     "02": "Nasabah Red Flag",
     "03": "Nasabah PEP",
     "04": "Nasabah Memiliki Kesamaan Nama Dengan DTTOT",
-    "05": "Transaksi Transaksi Tidak Sesuai Profil Nasabah",
-    "06": "Transaksi Debet/Kredit Seratus Juta Keatas",
-    "07": "Transaksi Debet/Kredit Lima Ratus Juta Keatas",
+    "05": "Transaksi Tidak Sesuai Profil Nasabah",
+    "06": "Transaksi Debet/Kredit 100 Juta Keatas",
+    "07": "Transaksi Debet/Kredit 500 Juta Keatas",
 }
 
 # ============================================================
-# 7. KODE AO (dari sheet AO)
+# 7. KODE AO
 # ============================================================
 AO_MAP = {
     "AA": "JEKKY SIMAMORA",
@@ -497,69 +455,89 @@ AO_MAP = {
 }
 
 # ============================================================
-# 8. FUNGSI TRANSLATE (untuk dipanggil di app.py)
+# 8. FUNGSI TRANSLATE
 # ============================================================
 
 def translate_cabang(kode):
-    """Translate kode cabang ke nama cabang"""
-    if kode is None or kode == "-":
+    """Translate kode cabang ke nama cabang (support 1 atau 001)"""
+    if kode is None or kode == "-" or kode == "":
         return "-"
-    return CABANG_MAP.get(str(kode).strip(), str(kode))
+    
+    val = str(kode).strip()
+    
+    if val in CABANG_MAP:
+        return CABANG_MAP[val]
+    
+    val_clean = val.lstrip('0') or '0'
+    if val_clean in CABANG_MAP:
+        return CABANG_MAP[val_clean]
+    
+    return val
 
 def translate_pekerjaan(kode):
     """Translate kode pekerjaan ke nama pekerjaan"""
-    if kode is None or kode == "-":
+    if kode is None or kode == "-" or kode == "":
         return "-"
-    return PEKERJAAN_MAP.get(str(kode).strip(), str(kode))
+    val = str(kode).strip()
+    return PEKERJAAN_MAP.get(val, val)
 
 def translate_status_kawin(kode):
     """Translate kode status kawin ke keterangan"""
-    if kode is None or kode == "-":
+    if kode is None or kode == "-" or kode == "":
         return "-"
-    return STATUS_KAWIN_MAP.get(str(kode).strip(), str(kode))
+    val = str(kode).strip()
+    return STATUS_KAWIN_MAP.get(val, val)
 
 def translate_bentuk_usaha(kode):
     """Translate kode bentuk usaha ke nama"""
-    if kode is None or kode == "-":
+    if kode is None or kode == "-" or kode == "":
         return "-"
-    return BENTUK_USAHA_MAP.get(str(kode).strip(), str(kode))
+    val = str(kode).strip().upper()
+    return BENTUK_USAHA_MAP.get(val, val)
 
 def translate_penghasilan(kode):
-    """Translate kode penghasilan ke range"""
-    if kode is None or kode == "-":
+    """Translate kode penghasilan ke range (support 1 atau 01)"""
+    if kode is None or kode == "-" or kode == "":
         return "-"
-    return PENGHASILAN_MAP.get(str(kode).strip(), str(kode))
+    
+    val = str(kode).strip()
+    
+    if val in PENGHASILAN_MAP:
+        return PENGHASILAN_MAP[val]
+    
+    val_clean = val.lstrip('0') or '0'
+    if val_clean in PENGHASILAN_MAP:
+        return PENGHASILAN_MAP[val_clean]
+    
+    return val
 
 def translate_kriteria_tkm(kode):
     """Translate kode kriteria TKM ke deskripsi"""
-    if kode is None or kode == "-":
+    if kode is None or kode == "-" or kode == "":
         return "-"
-    return KRITERIA_TKM_MAP.get(str(kode).strip(), str(kode))
+    val = str(kode).strip()
+    return KRITERIA_TKM_MAP.get(val, val)
 
 def translate_ao(kode):
     """Translate kode AO ke nama lengkap"""
-    if kode is None or kode == "-":
+    if kode is None or kode == "-" or kode == "":
         return "-"
-    return AO_MAP.get(str(kode).strip(), str(kode))
+    val = str(kode).strip().upper()
+    return AO_MAP.get(val, val)
 
 # ============================================================
 # 9. FUNGSI TRANSLATE OTOMATIS (berdasarkan nama kolom)
 # ============================================================
 
 def translate_value(column_name, value):
-    """
-    Translate value berdasarkan nama kolom (support prefix apapun)
-    """
+    """Translate value berdasarkan nama kolom (support prefix apapun)"""
     if value is None or value == "-" or value == "":
         return "-"
     
     val_str = str(value).strip()
     
     # Bersihin nama kolom dari prefix (M4CU.tab_, M4CUI.tab_, dll)
-    col_clean = column_name
-    # Hapus prefix file (M4CU.tab_, M4CUI.tab_, dll)
-    import re
-    col_clean = re.sub(r'^[A-Z0-9]+\.tab_', '', col_clean)
+    col_clean = re.sub(r'^[A-Z0-9]+\.tab_', '', column_name)
     col_clean = col_clean.upper()
     
     # === CABANG / BRANCH ===
