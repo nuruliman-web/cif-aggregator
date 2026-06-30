@@ -129,19 +129,12 @@ def extract_m4cui(df, existing_data):
     COL_CUDTLH = 27     # Birth date
     COL_CUNKTP = 28     # ID card number
     
-    total_processed = 0
-    total_found = 0
-    
     for _, row in df.iterrows():
         cif = str(row[COL_CUCODE]).strip()
         if not cif or cif in ["", "nan", "None"]:
             continue
         
-        total_processed += 1
-        
         if cif in existing_data:
-            total_found += 1
-            
             # Nama (prioritas CUNAME, fallback CUSHOR)
             if len(row) > COL_CUNAME:
                 val = str(row[COL_CUNAME]).strip()
@@ -180,31 +173,7 @@ def extract_m4cui(df, existing_data):
     return existing_data
 
 # ============================================================
-# 6. EKSTRAK M4CUG
-# ============================================================
-def extract_m4cug(df, existing_data):
-    if df is None or df.empty:
-        return existing_data
-    
-    # MAPPING POSISI KOLOM M4CUG (dari header)
-    COL_CUCODE = 1      # Customer code
-    COL_CUNAME = 2      # Customer Name
-    
-    for _, row in df.iterrows():
-        cif = str(row[COL_CUCODE]).strip()
-        if not cif or cif in ["", "nan", "None"] or cif not in existing_data:
-            continue
-        
-        # Nama
-        if len(row) > COL_CUNAME:
-            val = str(row[COL_CUNAME]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["nama"] = get_best_value([existing_data[cif]["nama"], val])
-    
-    return existing_data
-
-# ============================================================
-# 7. EKSTRAK M4CUAPU
+# 6. EKSTRAK M4CUAPU
 # ============================================================
 def extract_m4cuapu(df, existing_data):
     if df is None or df.empty:
@@ -249,7 +218,7 @@ def extract_m4cuapu(df, existing_data):
             if val not in ["", "nan"]:
                 existing_data[cif]["tujuan_usaha"] = get_best_value([existing_data[cif]["tujuan_usaha"], val])
         
-        # JK
+        # JK (prioritas dari M4CUAPU)
         if len(row) > COL_JK:
             val = str(row[COL_JK]).strip()
             if val not in ["", "nan"]:
@@ -261,7 +230,7 @@ def extract_m4cuapu(df, existing_data):
             if val not in ["", "nan"]:
                 existing_data[cif]["tempat_lahir"] = val
         
-        # Tgl Lahir
+        # Tgl Lahir (prioritas dari M4CUAPU)
         if len(row) > COL_TGL_LAHIR:
             val = str(row[COL_TGL_LAHIR]).strip()
             if val not in ["", "nan"]:
@@ -282,7 +251,7 @@ def extract_m4cuapu(df, existing_data):
     return existing_data
 
 # ============================================================
-# 8. EKSTRAK M4CUC (Badan Usaha)
+# 7. EKSTRAK M4CUC (Badan Usaha)
 # ============================================================
 def extract_m4cuc(df, existing_data):
     if df is None or df.empty:
@@ -335,14 +304,14 @@ def extract_m4cuc(df, existing_data):
     return existing_data
 
 # ============================================================
-# 9. GENERATE TEMPLATE (DENGAN VALIDASI)
+# 8. GENERATE TEMPLATE
 # ============================================================
 def generate_template(data):
     perorangan_rows = []
     badan_usaha_rows = []
     
     for cif, d in data.items():
-        # Pastikan semua field ada, kalau gak ada isi "-"
+        # Pastikan semua field ada
         default = {
             "nama": "-", "nik": "-", "alamat": "-", "alamat_lain": "-",
             "tempat_lahir": "-", "tanggal_lahir": "-", "kewarganegaraan": "-",
@@ -354,7 +323,6 @@ def generate_template(data):
             "jenis_nasabah": ""
         }
         
-        # Update dengan data yang ada
         for key in default:
             if key not in d:
                 d[key] = default[key]
@@ -362,6 +330,7 @@ def generate_template(data):
         jenis = d.get("jenis_nasabah", "").strip().upper()
         
         if jenis == "I":
+            # PERORANGAN
             required_fields = ["nama", "nik", "alamat", "tempat_lahir", "tanggal_lahir", 
                               "pekerjaan", "jk", "status_kawin", "nama_ibu"]
             is_lengkap = all(d[f] != "-" for f in required_fields)
@@ -369,36 +338,31 @@ def generate_template(data):
             row = {
                 "Status": "✅ LENGKAP" if is_lengkap else "⚠️ TIDAK LENGKAP",
                 "CIF": cif,
-                "Nama Lengkap + Alias": d["nama"],
+                "Nama Lengkap": d["nama"],
+                "Nama Alias": "-",
                 "No Dokumen Identitas": d["nik"],
-                "Alamat Tempat Tinggal (KTP)": d["alamat"],
-                "Alamat Tempat Tinggal Lain": d["alamat_lain"],
-                "Tempat dan Tanggal Lahir": f"{d['tempat_lahir']}, {d['tanggal_lahir']}".strip(", "),
+                "Alamat Tempat Tinggal": d["alamat"],
+                "Alamat Lain": d["alamat_lain"],
+                "Tempat Lahir": d["tempat_lahir"],
+                "Tanggal Lahir": d["tanggal_lahir"],
                 "Kewarganegaraan": d["kewarganegaraan"],
                 "Pekerjaan": d["pekerjaan"],
-                "Alamat & Telp Kantor": f"{d['alamat_kantor']}, {d['telp_kantor']}".strip(", "),
+                "Alamat Kantor": d["alamat_kantor"],
+                "Telp Kantor": d["telp_kantor"],
                 "Jenis Kelamin": d["jk"],
                 "Status Perkawinan": d["status_kawin"],
-                "Nama Gadis Ibu Kandung": d["nama_ibu"],
+                "Nama Ibu Kandung": d["nama_ibu"],
                 "Beneficial Owner": d["bo"],
                 "Sumber Dana": d["sumber_dana"],
-                "Penghasilan/Net Worth": d["penghasilan"],
+                "Penghasilan": d["penghasilan"],
                 "Tujuan Hubungan Usaha": d["tujuan_usaha"],
                 "Keterangan": "LENGKAP" if is_lengkap else "TIDAK LENGKAP"
             }
             
-            fields = ["Nama", "NIK", "Alamat", "TTL", "Pekerjaan", "JK", "Status Kawin", "Nama Ibu", "BO", "Sumber Dana", "Penghasilan", "Tujuan"]
-            field_values = [d["nama"], d["nik"], d["alamat"], f"{d['tempat_lahir']}{d['tanggal_lahir']}", 
-                           d["pekerjaan"], d["jk"], d["status_kawin"], d["nama_ibu"], 
-                           d["bo"], d["sumber_dana"], d["penghasilan"], d["tujuan_usaha"]]
-            
-            for f, v in zip(fields, field_values):
-                row[f"✅ {f}"] = "✅" if v != "-" else "❌"
-            
             perorangan_rows.append(row)
             
         else:
-            # Badan Usaha (C atau kosong)
+            # BADAN USAHA
             required_fields = ["nama", "no_izin", "bidang_usaha", "alamat"]
             is_lengkap = all(d[f] != "-" for f in required_fields)
             
@@ -406,25 +370,18 @@ def generate_template(data):
                 "Status": "✅ LENGKAP" if is_lengkap else "⚠️ TIDAK LENGKAP",
                 "CIF": cif,
                 "Nama Perusahaan": d["nama"],
-                "No Izin Instansi": d["no_izin"],
+                "No Izin": d["no_izin"],
                 "Bidang Usaha": d["bidang_usaha"],
-                "Alamat Kedudukan": d["alamat"],
-                "Tempat & Tgl Pendirian": f"{d['tempat_pendirian']}, {d['tanggal_pendirian']}".strip(", "),
+                "Alamat": d["alamat"],
+                "Tempat Pendirian": d["tempat_pendirian"],
+                "Tanggal Pendirian": d["tanggal_pendirian"],
                 "Bentuk Badan Hukum": d["bentuk_badan"],
                 "Beneficial Owner": d["bo"],
                 "Sumber Dana": d["sumber_dana"],
-                "Penghasilan/Net Worth": d["penghasilan"],
+                "Penghasilan": d["penghasilan"],
                 "Tujuan Hubungan Usaha": d["tujuan_usaha"],
                 "Keterangan": "LENGKAP" if is_lengkap else "TIDAK LENGKAP"
             }
-            
-            fields = ["Nama Perush", "No Izin", "Bidang Usaha", "Alamat", "Tgl Pendirian", "Bentuk Hukum", "BO", "Sumber Dana", "Penghasilan", "Tujuan"]
-            field_values = [d["nama"], d["no_izin"], d["bidang_usaha"], d["alamat"], 
-                           f"{d['tempat_pendirian']}{d['tanggal_pendirian']}", d["bentuk_badan"], 
-                           d["bo"], d["sumber_dana"], d["penghasilan"], d["tujuan_usaha"]]
-            
-            for f, v in zip(fields, field_values):
-                row[f"✅ {f}"] = "✅" if v != "-" else "❌"
             
             badan_usaha_rows.append(row)
     
@@ -434,7 +391,7 @@ def generate_template(data):
     return df_perorangan, df_badan_usaha
 
 # ============================================================
-# 10. DOWNLOAD CSV
+# 9. DOWNLOAD CSV
 # ============================================================
 def to_csv_download(df1, df2):
     output = io.BytesIO()
@@ -443,7 +400,7 @@ def to_csv_download(df1, df2):
     return output.getvalue()
 
 # ============================================================
-# 11. UI UTAMA
+# 10. UI UTAMA
 # ============================================================
 uploaded_files = st.file_uploader(
     "Upload file .tab", 
@@ -514,21 +471,14 @@ if uploaded_files:
                 data = extract_m4cui(all_files[key], data)
                 break
         
-        # 3. M4CUG
-        for key in all_files.keys():
-            if "M4CUG" in key:
-                st.write(f"✅ Menambahkan data dari: {key}")
-                data = extract_m4cug(all_files[key], data)
-                break
-        
-        # 4. M4CUAPU
+        # 3. M4CUAPU
         for key in all_files.keys():
             if "M4CUAPU" in key:
                 st.write(f"✅ Menambahkan data dari: {key}")
                 data = extract_m4cuapu(all_files[key], data)
                 break
         
-        # 5. M4CUC
+        # 4. M4CUC
         for key in all_files.keys():
             if "M4CUC" in key:
                 st.write(f"✅ Menambahkan data dari: {key}")
