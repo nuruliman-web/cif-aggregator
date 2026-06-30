@@ -27,8 +27,6 @@ if "selected_cols" not in st.session_state:
     st.session_state.selected_cols = {}
 if "processed_data" not in st.session_state:
     st.session_state.processed_data = None
-if "data_loaded" not in st.session_state:
-    st.session_state.data_loaded = False
 if "show_column_selector" not in st.session_state:
     st.session_state.show_column_selector = False
 
@@ -51,38 +49,6 @@ def make_unique_headers(headers):
             unique_headers.append(h_str)
     return unique_headers
 
-def render_checkbox_columns(headers, key_prefix, default_selected):
-    """Render kolom pilihan pake checkbox di columns (tanpa auto-reload)"""
-    selected = []
-    cols = st.columns(4)
-    
-    # Simpan state checkbox di session_state
-    checkbox_key = f"checkbox_{key_prefix}"
-    if checkbox_key not in st.session_state:
-        st.session_state[checkbox_key] = default_selected
-    
-    for i, h in enumerate(headers):
-        col_idx = i % 4
-        is_checked = i in st.session_state[checkbox_key]
-        with cols[col_idx]:
-            # Pake checkbox dengan key unik
-            checked = st.checkbox(
-                h, 
-                value=is_checked, 
-                key=f"{key_prefix}_cb_{i}",
-                label_visibility="collapsed" if len(h) > 20 else "visible"
-            )
-            if checked and i not in st.session_state[checkbox_key]:
-                st.session_state[checkbox_key].append(i)
-            elif not checked and i in st.session_state[checkbox_key]:
-                st.session_state[checkbox_key].remove(i)
-            
-            # Tampilkan nama kolom (pendek)
-            display_name = h[:25] + "..." if len(h) > 25 else h
-            st.caption(display_name)
-    
-    return st.session_state[checkbox_key]
-
 # ============================================================
 # 4. UI UTAMA
 # ============================================================
@@ -95,23 +61,24 @@ data_files = st.file_uploader(
     key="data_uploader"
 )
 
-# ---- Tombol Load Data dengan Progress ----
-col1, col2 = st.columns([1, 4])
-with col1:
-    load_button = st.button("📥 Load Data", use_container_width=True, type="primary")
-
-if load_button:
-    if not data_files:
-        st.warning("⚠️ Upload file .tab dulu!")
-    else:
+# ---- OTOMATIS LOAD DATA KALAU ADA FILE BARU ----
+if data_files:
+    # Cek apakah ada file baru yang belum di-load
+    new_files = False
+    for file in data_files:
+        raw_name = file.name
+        if raw_name.endswith(".tab"):
+            raw_name = raw_name[:-4]
+        elif raw_name.endswith(".txt"):
+            raw_name = raw_name[:-4]
+        key = raw_name.upper()
+        if key not in st.session_state.uploaded_files:
+            new_files = True
+            break
+    
+    if new_files:
         with st.spinner("⏳ Membaca file..."):
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            total_files = len(data_files)
-            for idx, file in enumerate(data_files):
-                status_text.text(f"Memproses: {file.name}")
-                
+            for file in data_files:
                 raw_name = file.name
                 if raw_name.endswith(".tab"):
                     raw_name = raw_name[:-4]
@@ -119,9 +86,7 @@ if load_button:
                     raw_name = raw_name[:-4]
                 key = raw_name.upper()
                 
-                # Skip kalau udah di-load
                 if key in st.session_state.uploaded_files:
-                    progress_bar.progress((idx + 1) / total_files)
                     continue
                 
                 df = parse_tab_file(file)
@@ -149,16 +114,7 @@ if load_button:
                         "file_name": file.name,
                         "matched_sheet": key
                     }
-                    st.session_state.data_loaded = True
                     st.session_state.show_column_selector = True
-                
-                # Update progress
-                progress_bar.progress((idx + 1) / total_files)
-                time.sleep(0.1)  # Biar keliatan progressnya
-            
-            status_text.text("✅ Selesai!")
-            progress_bar.empty()
-            st.rerun()
 
 # ---- Tampilkan status file yang sudah di-load ----
 if st.session_state.uploaded_files:
@@ -168,7 +124,7 @@ if st.session_state.uploaded_files:
     for key, info in st.session_state.uploaded_files.items():
         st.write(f"  ✅ {info['file_name']}: {len(info['df'])} baris, {len(info['headers'])} kolom")
 
-# ---- Pilih Kolom Kunci (muncul setelah load) ----
+# ---- Pilih Kolom Kunci ----
 if st.session_state.show_column_selector and st.session_state.uploaded_files:
     st.subheader("🔑 Pilih Kolom Kunci (CIF)")
     
@@ -209,7 +165,7 @@ if st.session_state.show_column_selector and st.session_state.uploaded_files:
         st.session_state.selected_key[key] = selected_idx
         st.write("---")
 
-# ---- Pilih Kolom yang Mau Dibawa (pake checkbox) ----
+# ---- Pilih Kolom yang Mau Dibawa (pake form biar gak reload tiap klik) ----
 if st.session_state.show_column_selector and st.session_state.uploaded_files and all(v is not None for v in st.session_state.selected_key.values()):
     st.subheader("📋 Pilih Kolom yang Mau Digabung")
     st.caption("💡 Centang kolom yang mau dibawa dari setiap file")
@@ -233,41 +189,39 @@ if st.session_state.show_column_selector and st.session_state.uploaded_files and
                         count += 1
                 st.session_state.selected_cols[key] = default_cols
             
-            # Render checkbox di columns
-            checkbox_key = f"form_checkbox_{key}"
-            if checkbox_key not in st.session_state:
-                st.session_state[checkbox_key] = st.session_state.selected_cols.get(key, [key_col])
-            
-            # Render checkbox
-            selected = []
+            # Render checkbox di columns (4 kolom)
             cols = st.columns(4)
             for i, h in enumerate(headers):
                 col_idx = i % 4
-                is_checked = i in st.session_state[checkbox_key]
+                is_checked = i in st.session_state.selected_cols.get(key, [key_col])
                 with cols[col_idx]:
-                    checked = st.checkbox(
+                    st.checkbox(
                         f"{i}: {h[:20]}..." if len(h) > 20 else f"{i}: {h}",
                         value=is_checked,
                         key=f"form_{key}_cb_{i}"
                     )
-                    if checked:
-                        selected.append(i)
-            
-            st.session_state[checkbox_key] = selected
             st.write("---")
         
-        # Submit button
-        submitted = st.form_submit_button("✅ Simpan Pilihan Kolom", use_container_width=True, type="primary")
+        # Submit button dengan notifikasi
+        submitted = st.form_submit_button("💾 Simpan Pilihan Kolom", use_container_width=True, type="primary")
         
         if submitted:
-            for key in st.session_state.uploaded_files.keys():
-                checkbox_key = f"form_checkbox_{key}"
-                if checkbox_key in st.session_state:
-                    st.session_state.selected_cols[key] = st.session_state[checkbox_key]
-            st.success("✅ Pilihan kolom disimpan!")
-            st.rerun()
+            try:
+                # Simpan pilihan
+                for key in st.session_state.uploaded_files.keys():
+                    selected = []
+                    for i in range(len(st.session_state.uploaded_files[key]["headers"])):
+                        if st.session_state.get(f"form_{key}_cb_{i}", False):
+                            selected.append(i)
+                    st.session_state.selected_cols[key] = selected
+                
+                st.success("✅ Pilihan kolom berhasil disimpan!")
+                time.sleep(0.5)
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Gagal menyimpan: {str(e)}")
 
-# ---- Proses Gabung ----
+# ---- Proses Gabung dengan Progress Bar ----
 if st.session_state.show_column_selector and st.session_state.uploaded_files and all(v is not None for v in st.session_state.selected_key.values()):
     # Cek apakah ada pilihan kolom yang dipilih
     has_selection = False
@@ -278,77 +232,105 @@ if st.session_state.show_column_selector and st.session_state.uploaded_files and
     
     if has_selection:
         if st.button("🚀 Gabungkan Data", use_container_width=True, type="primary"):
-            with st.spinner("⏳ Memproses..."):
-                try:
-                    first_key = list(st.session_state.uploaded_files.keys())[0]
-                    first_info = st.session_state.uploaded_files[first_key]
-                    first_df = first_info["df"]
-                    first_key_col = st.session_state.selected_key[first_key]
-                    first_selected_cols = st.session_state.selected_cols[first_key]
-                    first_headers = first_info["headers"]
+            try:
+                # --- PROGRESS BAR ---
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                first_key = list(st.session_state.uploaded_files.keys())[0]
+                first_info = st.session_state.uploaded_files[first_key]
+                first_df = first_info["df"]
+                first_key_col = st.session_state.selected_key[first_key]
+                first_selected_cols = st.session_state.selected_cols[first_key]
+                first_headers = first_info["headers"]
+                
+                status_text.text("🔄 Membuat data awal...")
+                progress_bar.progress(10)
+                time.sleep(0.2)
+                
+                result_data = {}
+                result_headers = []
+                
+                # Ambil CIF dari file pertama (hanya 1 kolom CIF)
+                cif_col_name = "CIF"
+                result_headers.append(cif_col_name)
+                result_data[cif_col_name] = first_df[first_key_col].tolist()
+                
+                # Ambil kolom lain dari file pertama (kecuali CIF)
+                for col_idx in first_selected_cols:
+                    if col_idx == first_key_col:
+                        continue
+                    col_name = first_headers[col_idx] if col_idx < len(first_headers) else f"Kolom_{col_idx}"
+                    final_name = f"{first_info['file_name']}_{col_name}"
+                    result_headers.append(final_name)
+                    result_data[final_name] = first_df[col_idx].tolist()
+                
+                status_text.text("🔄 Menambahkan data dari file lain...")
+                progress_bar.progress(30)
+                time.sleep(0.2)
+                
+                # Tambah dari file lain (tanpa CIF)
+                other_files = [k for k in st.session_state.uploaded_files.keys() if k != first_key]
+                total_other = len(other_files)
+                
+                for idx, key in enumerate(other_files):
+                    info = st.session_state.uploaded_files[key]
+                    df = info["df"]
+                    key_col = st.session_state.selected_key[key]
+                    selected_cols = st.session_state.selected_cols[key]
+                    headers = info["headers"]
                     
-                    result_data = {}
-                    result_headers = []
+                    status_text.text(f"🔄 Memproses {info['file_name']}... ({idx+1}/{total_other})")
+                    progress_bar.progress(30 + int((idx + 1) / total_other * 50))
                     
-                    # Ambil CIF dari file pertama (hanya 1 kolom CIF)
-                    cif_col_name = "CIF"
-                    result_headers.append(cif_col_name)
-                    result_data[cif_col_name] = first_df[first_key_col].tolist()
+                    other_keys = df[key_col].tolist()
+                    other_data = {}
                     
-                    # Ambil kolom lain dari file pertama (kecuali CIF)
-                    for col_idx in first_selected_cols:
-                        if col_idx == first_key_col:
+                    for col_idx in selected_cols:
+                        if col_idx == key_col:
                             continue
-                        col_name = first_headers[col_idx] if col_idx < len(first_headers) else f"Kolom_{col_idx}"
-                        final_name = f"{first_info['file_name']}_{col_name}"
+                        col_name = headers[col_idx] if col_idx < len(headers) else f"Kolom_{col_idx}"
+                        final_name = f"{info['file_name']}_{col_name}"
                         result_headers.append(final_name)
-                        result_data[final_name] = first_df[col_idx].tolist()
+                        other_data[final_name] = df[col_idx].tolist()
                     
-                    # Tambah dari file lain (tanpa CIF)
-                    for key, info in st.session_state.uploaded_files.items():
-                        if key == first_key:
-                            continue
-                        
-                        df = info["df"]
-                        key_col = st.session_state.selected_key[key]
-                        selected_cols = st.session_state.selected_cols[key]
-                        headers = info["headers"]
-                        
-                        other_keys = df[key_col].tolist()
-                        other_data = {}
-                        
-                        for col_idx in selected_cols:
-                            if col_idx == key_col:
-                                continue
-                            col_name = headers[col_idx] if col_idx < len(headers) else f"Kolom_{col_idx}"
-                            final_name = f"{info['file_name']}_{col_name}"
-                            result_headers.append(final_name)
-                            other_data[final_name] = df[col_idx].tolist()
-                        
-                        result_keys = result_data[cif_col_name]
-                        
-                        for i, row_key in enumerate(result_keys):
-                            for j, other_key in enumerate(other_keys):
-                                if str(row_key).strip() == str(other_key).strip():
-                                    for col_name, col_data in other_data.items():
-                                        if col_name not in result_data:
-                                            result_data[col_name] = []
-                                        while len(result_data[col_name]) < i:
-                                            result_data[col_name].append("-")
-                                        result_data[col_name].append(col_data[j])
-                                    break
-                            for col_name in other_data.keys():
-                                if col_name not in result_data:
-                                    result_data[col_name] = []
-                                while len(result_data[col_name]) < i + 1:
-                                    result_data[col_name].append("-")
+                    result_keys = result_data[cif_col_name]
                     
-                    result_df = pd.DataFrame(result_data)
-                    st.session_state.processed_data = result_df
-                    st.success(f"✅ Data berhasil digabung! {len(result_df)} baris, {len(result_df.columns)} kolom")
+                    # Match data
+                    for i, row_key in enumerate(result_keys):
+                        for j, other_key in enumerate(other_keys):
+                            if str(row_key).strip() == str(other_key).strip():
+                                for col_name, col_data in other_data.items():
+                                    if col_name not in result_data:
+                                        result_data[col_name] = []
+                                    while len(result_data[col_name]) < i:
+                                        result_data[col_name].append("-")
+                                    result_data[col_name].append(col_data[j])
+                                break
+                        for col_name in other_data.keys():
+                            if col_name not in result_data:
+                                result_data[col_name] = []
+                            while len(result_data[col_name]) < i + 1:
+                                result_data[col_name].append("-")
                     
-                except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
+                    time.sleep(0.1)
+                
+                status_text.text("🔄 Membuat DataFrame akhir...")
+                progress_bar.progress(90)
+                time.sleep(0.2)
+                
+                result_df = pd.DataFrame(result_data)
+                st.session_state.processed_data = result_df
+                
+                progress_bar.progress(100)
+                status_text.text("✅ Selesai!")
+                time.sleep(0.3)
+                
+                st.success(f"✅ Data berhasil digabung! {len(result_df)} baris, {len(result_df.columns)} kolom")
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
     else:
         st.warning("⚠️ Pilih minimal 1 kolom dari setiap file untuk digabung")
 
@@ -389,8 +371,8 @@ if st.session_state.processed_data is not None:
 # ---- Reset ----
 if st.button("🔄 Reset Semua", use_container_width=True):
     for key in list(st.session_state.keys()):
-        st.session_state[key] = {} if key in ["uploaded_files", "selected_key", "selected_cols"] else None
+        if key not in ["header_mapping"]:
+            st.session_state[key] = {} if key in ["uploaded_files", "selected_key", "selected_cols"] else None
     st.session_state.processed_data = None
-    st.session_state.data_loaded = False
     st.session_state.show_column_selector = False
     st.rerun()
