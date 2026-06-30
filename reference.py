@@ -548,40 +548,46 @@ def translate_ao(kode):
 
 def translate_value(column_name, value):
     """
-    Translate value berdasarkan nama kolom
+    Translate value berdasarkan nama kolom (support prefix apapun)
     """
     if value is None or value == "-" or value == "":
         return "-"
     
-    col_upper = column_name.upper()
     val_str = str(value).strip()
     
-    # Cabang
-    if "BRANCH" in col_upper or "CABANG" in col_upper or "CUBRCO" in col_upper or "BRCODE" in col_upper:
+    # Bersihin nama kolom dari prefix (M4CU.tab_, M4CUI.tab_, dll)
+    col_clean = column_name
+    # Hapus prefix file (M4CU.tab_, M4CUI.tab_, dll)
+    import re
+    col_clean = re.sub(r'^[A-Z0-9]+\.tab_', '', col_clean)
+    col_clean = col_clean.upper()
+    
+    # === CABANG / BRANCH ===
+    if "BRANCH" in col_clean or "CABANG" in col_clean or "CUBRCO" in col_clean or "BRCODE" in col_clean:
         return translate_cabang(val_str)
     
-    # Pekerjaan
-    if "PEKERJAAN" in col_upper or "CUKRJA" in col_upper or "JOB" in col_upper or "PROFESI" in col_upper:
+    # === PEKERJAAN ===
+    if "PEKERJAAN" in col_clean or "CUKRJA" in col_clean or "JOB" in col_clean or "PROFESI" in col_clean:
         return translate_pekerjaan(val_str)
     
-    # Status Kawin
-    if "STATUS KAWIN" in col_upper or "CUMRST" in col_upper or "MARITAL" in col_upper:
+    # === STATUS KAWIN ===
+    if "STATUS KAWIN" in col_clean or "CUMRST" in col_clean or "MARITAL" in col_clean:
         return translate_status_kawin(val_str)
     
-    # Bentuk Usaha
-    if "BENTUK USAHA" in col_upper or "BENTUK BADAN" in col_upper:
+    # === BENTUK USAHA ===
+    if "BENTUK USAHA" in col_clean or "BENTUK BADAN" in col_clean:
         return translate_bentuk_usaha(val_str)
     
-    # Penghasilan
-    if "PENGHASILAN" in col_upper or "INCOME" in col_upper:
+    # === PENGHASILAN ===
+    if "PENGHASILAN" in col_clean or "INCOME" in col_clean or "CUINCM" in col_clean:
         return translate_penghasilan(val_str)
     
-    # AO
-    if "AO" in col_upper or "ACCOUNT OFFICER" in col_upper or "CUAOCO" in col_upper:
+    # === AO ===
+    if "AO" in col_clean or "ACCOUNT OFFICER" in col_clean or "CUAOCO" in col_clean:
         return translate_ao(val_str)
     
-    # Kriteria TKM
-    if "KRITERIA" in col_upper or "TKM" in col_upper:
+    # === KRITERIA TKM ===
+    if "KRITERIA" in col_clean or "TKM" in col_clean:
         return translate_kriteria_tkm(val_str)
     
     # Tidak ada mapping, return value asli
