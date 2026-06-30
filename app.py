@@ -11,7 +11,7 @@ st.title("📊 Visual Data Mapper")
 st.write("Upload file .tab, pilih kolom yang mau digabung")
 
 # ============================================================
-# 2. HARDCODE HEADER (FIX UNTUK M4CUI & M4CUC)
+# 2. HARDCODE HEADER (FIX M4CUI & M4CUC)
 # ============================================================
 
 HEADER_MAPPING = {
@@ -29,13 +29,13 @@ HEADER_MAPPING = {
     },
     "M4CUAPPU": {
         "kode": ["Status record", "Customer code", "Customer Name", "Risk Factor", "Deskripsi Risk Factor", "Domisili 1", "Domisili 2", "Domisili 3", "Domisili 4", "Flag PPT", "Red Flag", "No.KIMS/KITAP", "Kode Pekerjaan", "Sumber Dana", "Deskripsi Sumber Dana", "Tujuan Penggunaan Dana", "Deskripsi Tujuan Dana", "Job Type Relation", "Nama Pengurus 1", "Nama Pengurus 2", "Nama Pengurus 3", "Nama Pengurus 4", "Nama Pengurus 5", "Kode Pengurus 1", "Kode Pengurus 2", "Kode Pengurus 3", "Kode Pengurus 4", "Kode Pengurus 5", "Beneficiary Owner", "Beneficiary Owner Name", "Alamat ID 1", "Alamat ID 2", "Kelurahan", "Kecamatan", "Kota", "Propinsi", "Kode Pos", "Domisili BO 1", "Domisili BO 2", "Domisili BO 3", "Domisili BO 4", "Kode Area", "Telephon", "Handphone", "Jenis Kelamin", "Agama", "Tempat Lahir", "Tgl Lahir", "Status Perkawinan", "Sumber Dana BO", "Deskripsi Sumber Dana BO", "Tujuan Dana BO", "Deskripsi Tujuan Dana BO", "Rata-Rata Penghasilan", "Informasi BO", "No. Izin Usaha", "Bentuk Usaha", "Bidang Usaha", "Identitas Nasabah", "Lokasi Usaha", "Profil Nasabah", "Jumlah Transaksi", "Kegiatan Usaha", "Struktur Kepemilikan", "Informasi Lain", "Resume Akhir", "Branch", "Beginning Date Customer", "Date Input", "Time Input", "User Input", "User Otor", "Time Otor", "Date Last Update"],
-        "deskripsi": []
+        "deskripsi": []  # Langsung pake kode
     },
     "M4CU": {
         "kode": ["CUSTAT", "CUCODE", "CUNAME", "CUTITL", "CUADR1", "CUADR2", "CUADR3", "CUTELP", "CUTEL2", "CUFAXN", "CUINCO", "CUSHOR", "CUBRCO", "CUFPAR", "CUCPAR", "CUAOCO", "CUIDCO", "CUARCO", "CUNPWP", "CUDTBG", "CUAUTU", "CUUSER", "CUDTLC", "CUAGAM", "CUKRJA", "CUJEKL", "CUDTLH", "CUNKTP", "CUDTID", "CUNECO", "CUPERS", "CUFLTY", "CUFLPP", "CUOWCO"],
         "deskripsi": ["Status record", "Customer code", "Customer Name", "Titel", "Address-1", "Address-2", "City", "Phone Number 1", "Phone Number 2", "Fax Number", "Institution Code", "Short name", "Branch", "Flag Parent Cust. 0=Yes;1=No", "Parent No.", "A/O code", "Industry Code", "Area Code", "NPWP Nasabah", "Beginning Date Customer", "Authorizer", "Operator-Id", "Tanggal diubah", "Agama", "Pekerjaan", "Jenis kelamin", "Birth date", "ID card number", "ID expire date", "Country", "Contact person", "Customer type", "P.P.H type", "Golongan pemilik"]
     },
-    # ============ FIX: M4CUI (Kolom 0 = CUCODE) ============
+    # ============ FIX: M4CUI (Kolom 0 = CUCODE, BUKAN Status record) ============
     "M4CUI": {
         "kode": ["CUCODE", "CUTITL", "CUSHOR", "CUJEKL", "CUAGAM", "CUPLBR", "CUDTLH", "CUMRST", "CUHOBI", "CUNSPO", "CUNCHL", "CUNPRT", "CURSDS", "CUYRSD", "CUMRSD", "CUEDUC", "CUCTFL", "CUCTZC", "CUIDTY", "CUIDNO", "CUDTPB", "CUDTID", "CUCC01", "CUCL01", "CUCC02", "CUCL02", "CUATM1", "CUATM2", "CUIKRJ", "CUPSTN", "CUCPN1", "CUTCP1", "CUADP1", "CUADP2", "CUCITP", "CUZIPP", "CUPPA1", "CUPPN1", "CUEXT1", "CUPPA2", "CUPPN2", "CUEXT2", "CUPFXA", "CUPFXN", "CUINCM", "CUFRIC", "CUFRDN", "CUTOIC", "CUIDIN", "CUITIN", "CUIUIN", "CUIUOT", "CUITOT", "CUIDLT"],
         "deskripsi": ["Customer code", "Titel", "Short name", "Jenis kelamin", "Agama", "Place Birth", "Birth date", "Marital Status", "Hobbies", "Numbers Wife", "Numbers Child", "Numbers Parents", "Phone#1", "Lama Tahun menempati", "Lama Bln Menempati", "Education Code", "CitizenShip Flag", "Citizenship Code", "ID Type", "ID Number", "Publish Date", "ID expire date", "Credit Card #1", "Credit Limited #1", "Credit Card #2", "Credit Limited", "ATM #1", "ATM #2", "Job Type", "Position Job", "Company Name", "Type Company", "Address #1", "Address #2", "City", "Zip Code", "Kode Area", "Phone #1", "Ext #1", "Kode Area", "Phone #2", "Ext #2", "Fax Area", "Facsimile", "Income per Month", "Sumber Penghasilan", "Sumber Dana", "Tujuan Penggunaan", "Date Input", "Time Input", "User Input", "User Otor", "Time Otor", "Date Last Update"]
@@ -166,12 +166,12 @@ HEADER_MAPPING = {
     },
     "T6APPU": {
         "kode": ["Status", "Nomor Rekening", "Cabang Transaksi", "Nomor CIF Nasabah", "Nama Nasabah", "Kode Transaksi", "Nomor Referensi", "Nilai Transaksi", "Kode Alert/Peringatan", "Alamat 1", "Alamat 2", "Kelurahan", "Kabupaten", "Provinsi", "Nomor Identitas Nasabah", "Kode Program", "Tanggal Transaksi", "Jam Transaksi", "User Teller ID", "Nomor Batch", "Nomor Counter", "Flag Otorisasi", "User Otorisasi", "User Override", "Keterangan/Catatan Transaksi", "RESERVE 1", "RESERVE 2", "RESERVE 3", "RESERVE 4", "RESERVE 5", "RESERVE 6", "RESERVE 7", "RESERVE 8", "RESERVE 9"],
-        "deskripsi": []
+        "deskripsi": []  # Langsung pake kode
     },
-    # ============ FIX: M4CUC (Kolom 0 = CIF) ============
+    # ============ FIX: M4CUC (Kolom 0 = CIF, BUKAN Status record) ============
     "M4CUC": {
         "kode": ["CIF", "Bentuk Usaha", "Bidang Usaha", "Nomor Ijin Usaha", "Nomor Akta", "Tanggal Berdiri", "Penghasilan Per-tahun", "Tujuan Hub", "Sumber Dana", "Kepemilikan Modal", "Column11", "Column12", "Column13", "Column14", "Column15", "Column16", "Column17", "Column18", "Column19", "Column20", "Column21"],
-        "deskripsi": []
+        "deskripsi": []  # Langsung pake kode
     }
 }
 
