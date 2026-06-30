@@ -59,14 +59,13 @@ def extract_m4cu(df):
     if df is None or df.empty:
         return result
     
-    # MAPPING POSISI KOLOM M4CU (dari header)
+    # MAPPING POSISI KOLOM M4CU (dari header Excel)
     COL_CUCODE = 1      # Customer code
     COL_CUNAME = 2      # Customer Name
     COL_CUADR1 = 4      # Address-1
     COL_CUADR2 = 5      # Address-2
     COL_CUADR3 = 6      # City
     COL_CUFLTY = 31     # Customer type (I/C)
-    COL_CUKRJA = 24     # Pekerjaan
     COL_CUJEKL = 25     # Jenis kelamin
     COL_CUDTLH = 26     # Birth date
     COL_CUNKTP = 27     # ID card number
@@ -86,13 +85,17 @@ def extract_m4cu(df):
         
         result[cif] = {
             "cif": cif,
-            "nama": str(row[COL_CUNAME]).strip() if len(row) > COL_CUNAME and str(row[COL_CUNAME]).strip() not in ["", "nan"] else "-",
+            "nama_m4cu": str(row[COL_CUNAME]).strip() if len(row) > COL_CUNAME and str(row[COL_CUNAME]).strip() not in ["", "nan"] else "-",
+            "alamat_m4cu": alamat if alamat else "-",
+            "jk_m4cu": str(row[COL_CUJEKL]).strip() if len(row) > COL_CUJEKL and str(row[COL_CUJEKL]).strip() not in ["", "nan"] else "-",
+            "tanggal_lahir_m4cu": str(row[COL_CUDTLH]).strip() if len(row) > COL_CUDTLH and str(row[COL_CUDTLH]).strip() not in ["", "nan"] else "-",
+            "nik_m4cu": str(row[COL_CUNKTP]).strip() if len(row) > COL_CUNKTP and str(row[COL_CUNKTP]).strip() not in ["", "nan"] else "-",
             "jenis_nasabah": jenis if jenis not in ["", "nan"] else "",
-            "alamat": alamat if alamat else "-",
-            "pekerjaan": str(row[COL_CUKRJA]).strip() if len(row) > COL_CUKRJA and str(row[COL_CUKRJA]).strip() not in ["", "nan"] else "-",
-            "jk": str(row[COL_CUJEKL]).strip() if len(row) > COL_CUJEKL and str(row[COL_CUJEKL]).strip() not in ["", "nan"] else "-",
-            "tanggal_lahir": str(row[COL_CUDTLH]).strip() if len(row) > COL_CUDTLH and str(row[COL_CUDTLH]).strip() not in ["", "nan"] else "-",
-            "nik": str(row[COL_CUNKTP]).strip() if len(row) > COL_CUNKTP and str(row[COL_CUNKTP]).strip() not in ["", "nan"] else "-",
+            "nama": "-",
+            "alamat": "-",
+            "jk": "-",
+            "tanggal_lahir": "-",
+            "nik": "-",
             "tempat_lahir": "-",
             "status_kawin": "-",
             "nama_ibu": "-",
@@ -114,197 +117,79 @@ def extract_m4cu(df):
     return result
 
 # ============================================================
-# 5. EKSTRAK M4CUI
+# 5. EKSTRAK M4CUI (PELENGKAP)
 # ============================================================
 def extract_m4cui(df, existing_data):
     if df is None or df.empty:
         return existing_data
     
-    # MAPPING POSISI KOLOM M4CUI (dari header)
-    COL_CUCODE = 1      # Customer code
-    COL_CUNAME = 2      # Customer Name
-    COL_CUSHOR = 11     # Short name
-    COL_CUKRJA = 25     # Pekerjaan
-    COL_CUJEKL = 26     # Jenis kelamin
-    COL_CUDTLH = 27     # Birth date
-    COL_CUNKTP = 28     # ID card number
-    
-    for _, row in df.iterrows():
-        cif = str(row[COL_CUCODE]).strip()
-        if not cif or cif in ["", "nan", "None"]:
-            continue
-        
-        if cif in existing_data:
-            # Nama
-            if len(row) > COL_CUNAME:
-                val = str(row[COL_CUNAME]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["nama"] = get_best_value([existing_data[cif]["nama"], val])
-            
-            if len(row) > COL_CUSHOR:
-                val = str(row[COL_CUSHOR]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["nama"] = get_best_value([existing_data[cif]["nama"], val])
-            
-            # Pekerjaan
-            if len(row) > COL_CUKRJA:
-                val = str(row[COL_CUKRJA]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["pekerjaan"] = get_best_value([existing_data[cif]["pekerjaan"], val])
-            
-            # Jenis Kelamin
-            if len(row) > COL_CUJEKL:
-                val = str(row[COL_CUJEKL]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["jk"] = get_best_value([existing_data[cif]["jk"], val])
-            
-            # Tanggal Lahir
-            if len(row) > COL_CUDTLH:
-                val = str(row[COL_CUDTLH]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["tanggal_lahir"] = get_best_value([existing_data[cif]["tanggal_lahir"], val])
-            
-            # NIK
-            if len(row) > COL_CUNKTP:
-                val = str(row[COL_CUNKTP]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["nik"] = get_best_value([existing_data[cif]["nik"], val])
-    
-    return existing_data
-
-# ============================================================
-# 6. EKSTRAK M4CUAPU
-# ============================================================
-def extract_m4cuapu(df, existing_data):
-    if df is None or df.empty:
-        return existing_data
-    
-    # MAPPING POSISI KOLOM M4CUAPU (dari header)
-    COL_CUCODE = 1
-    COL_BO = 22
-    COL_BONAME = 23
-    COL_SUMBER_DANA = 33
-    COL_TUJUAN = 35
-    COL_JK = 41
-    COL_TEMPAT_LAHIR = 43
-    COL_TGL_LAHIR = 44
-    COL_STATUS_KAWIN = 45
-    COL_PENGHASILAN = 48
+    # MAPPING POSISI KOLOM M4CUI (dari header Excel)
+    # Perhatikan: di file M4CUI, kolom 0 = CUCODE (bukan kolom 1!)
+    COL_CUCODE = 0      # Customer code
+    COL_CUSHOR = 2      # Short name (alias)
+    COL_CUPLBR = 5      # Place Birth (Tempat Lahir)
+    COL_CUDTLH = 6      # Birth date (Tanggal Lahir)
+    COL_CUJEKL = 3      # Jenis kelamin
+    COL_CUIDNO = 19     # ID Number (NIK)
+    COL_CUTOIC = 47     # Tujuan Penggunaan Dana
     
     for _, row in df.iterrows():
         cif = str(row[COL_CUCODE]).strip()
         if not cif or cif in ["", "nan", "None"] or cif not in existing_data:
             continue
         
-        # BO
-        if len(row) > COL_BO:
-            val = str(row[COL_BO]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["bo"] = val
-        if len(row) > COL_BONAME:
-            val = str(row[COL_BONAME]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["bo"] = get_best_value([existing_data[cif]["bo"], val])
+        # === KUMPULKAN DATA DARI M4CUI ===
+        alias = str(row[COL_CUSHOR]).strip() if len(row) > COL_CUSHOR and str(row[COL_CUSHOR]).strip() not in ["", "nan"] else "-"
+        tempat_lahir = str(row[COL_CUPLBR]).strip() if len(row) > COL_CUPLBR and str(row[COL_CUPLBR]).strip() not in ["", "nan"] else "-"
+        tgl_lahir = str(row[COL_CUDTLH]).strip() if len(row) > COL_CUDTLH and str(row[COL_CUDTLH]).strip() not in ["", "nan"] else "-"
+        jk = str(row[COL_CUJEKL]).strip() if len(row) > COL_CUJEKL and str(row[COL_CUJEKL]).strip() not in ["", "nan"] else "-"
+        nik = str(row[COL_CUIDNO]).strip() if len(row) > COL_CUIDNO and str(row[COL_CUIDNO]).strip() not in ["", "nan"] else "-"
+        tujuan = str(row[COL_CUTOIC]).strip() if len(row) > COL_CUTOIC and str(row[COL_CUTOIC]).strip() not in ["", "nan"] else "-"
         
-        # Sumber Dana
-        if len(row) > COL_SUMBER_DANA:
-            val = str(row[COL_SUMBER_DANA]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["sumber_dana"] = get_best_value([existing_data[cif]["sumber_dana"], val])
+        # === GABUNG DENGAN PRIORITAS (M4CU > M4CUI) ===
         
-        # Tujuan
-        if len(row) > COL_TUJUAN:
-            val = str(row[COL_TUJUAN]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["tujuan_usaha"] = get_best_value([existing_data[cif]["tujuan_usaha"], val])
+        # Nama: M4CU dulu, kalau kosong pakai alias dari M4CUI
+        if existing_data[cif]["nama_m4cu"] != "-":
+            existing_data[cif]["nama"] = existing_data[cif]["nama_m4cu"]
+        elif alias != "-":
+            existing_data[cif]["nama"] = alias
+        else:
+            existing_data[cif]["nama"] = "-"
         
-        # JK
-        if len(row) > COL_JK:
-            val = str(row[COL_JK]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["jk"] = get_best_value([existing_data[cif]["jk"], val])
+        # Alamat: M4CU dulu
+        if existing_data[cif]["alamat_m4cu"] != "-":
+            existing_data[cif]["alamat"] = existing_data[cif]["alamat_m4cu"]
         
-        # Tempat Lahir
-        if len(row) > COL_TEMPAT_LAHIR:
-            val = str(row[COL_TEMPAT_LAHIR]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["tempat_lahir"] = val
+        # Tempat Lahir: dari M4CUI (M4CU gak ada)
+        if tempat_lahir != "-":
+            existing_data[cif]["tempat_lahir"] = tempat_lahir
         
-        # Tgl Lahir
-        if len(row) > COL_TGL_LAHIR:
-            val = str(row[COL_TGL_LAHIR]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["tanggal_lahir"] = get_best_value([existing_data[cif]["tanggal_lahir"], val])
+        # Tanggal Lahir: M4CU dulu, kalau kosong pakai M4CUI
+        if existing_data[cif]["tanggal_lahir_m4cu"] != "-":
+            existing_data[cif]["tanggal_lahir"] = existing_data[cif]["tanggal_lahir_m4cu"]
+        elif tgl_lahir != "-":
+            existing_data[cif]["tanggal_lahir"] = tgl_lahir
         
-        # Status Kawin
-        if len(row) > COL_STATUS_KAWIN:
-            val = str(row[COL_STATUS_KAWIN]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["status_kawin"] = val
+        # NIK: M4CU dulu, kalau kosong pakai M4CUI
+        if existing_data[cif]["nik_m4cu"] != "-":
+            existing_data[cif]["nik"] = existing_data[cif]["nik_m4cu"]
+        elif nik != "-":
+            existing_data[cif]["nik"] = nik
         
-        # Penghasilan
-        if len(row) > COL_PENGHASILAN:
-            val = str(row[COL_PENGHASILAN]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["penghasilan"] = get_best_value([existing_data[cif]["penghasilan"], val])
+        # JK: M4CU dulu, kalau kosong pakai M4CUI
+        if existing_data[cif]["jk_m4cu"] != "-":
+            existing_data[cif]["jk"] = existing_data[cif]["jk_m4cu"]
+        elif jk != "-":
+            existing_data[cif]["jk"] = jk
+        
+        # Tujuan: dari M4CUI
+        if tujuan != "-":
+            existing_data[cif]["tujuan_usaha"] = tujuan
     
     return existing_data
 
 # ============================================================
-# 7. EKSTRAK M4CUC (Badan Usaha)
-# ============================================================
-def extract_m4cuc(df, existing_data):
-    if df is None or df.empty:
-        return existing_data
-    
-    # MAPPING POSISI KOLOM M4CUC (dari header)
-    COL_CIF = 0         # CIF
-    COL_BENTUK = 1      # Bentuk Usaha
-    COL_BIDANG = 2      # Bidang Usaha
-    COL_NO_IZIN = 3     # Nomor Ijin Usaha
-    COL_TGL_BERDIRI = 5 # Tanggal Berdiri
-    COL_TUJUAN = 7      # Tujuan Hub
-    COL_SUMBER = 8      # Sumber Dana
-    
-    for _, row in df.iterrows():
-        cif = str(row[COL_CIF]).strip()
-        if not cif or cif in ["", "nan", "None"] or cif not in existing_data:
-            continue
-        
-        if len(row) > COL_BENTUK:
-            val = str(row[COL_BENTUK]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["bentuk_badan"] = val
-        
-        if len(row) > COL_BIDANG:
-            val = str(row[COL_BIDANG]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["bidang_usaha"] = val
-        
-        if len(row) > COL_NO_IZIN:
-            val = str(row[COL_NO_IZIN]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["no_izin"] = val
-        
-        if len(row) > COL_TGL_BERDIRI:
-            val = str(row[COL_TGL_BERDIRI]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["tanggal_pendirian"] = val
-        
-        if len(row) > COL_TUJUAN:
-            val = str(row[COL_TUJUAN]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["tujuan_usaha"] = get_best_value([existing_data[cif]["tujuan_usaha"], val])
-        
-        if len(row) > COL_SUMBER:
-            val = str(row[COL_SUMBER]).strip()
-            if val not in ["", "nan"]:
-                existing_data[cif]["sumber_dana"] = get_best_value([existing_data[cif]["sumber_dana"], val])
-    
-    return existing_data
-
-# ============================================================
-# 8. GENERATE TEMPLATE
+# 6. GENERATE TEMPLATE
 # ============================================================
 def generate_template(data):
     perorangan_rows = []
@@ -327,7 +212,6 @@ def generate_template(data):
             if key not in d or d[key] in ["", "nan", "None"]:
                 d[key] = default[key]
         
-        # Bersihkan nilai yang masih "nan"
         for key in d:
             if d[key] in ["nan", "None", ""]:
                 d[key] = "-"
@@ -335,7 +219,6 @@ def generate_template(data):
         jenis = d.get("jenis_nasabah", "").strip().upper()
         
         if jenis == "I":
-            # PERORANGAN
             required_fields = ["nama", "nik", "alamat", "tempat_lahir", "tanggal_lahir", 
                               "pekerjaan", "jk", "status_kawin", "nama_ibu"]
             is_lengkap = all(d[f] != "-" for f in required_fields)
@@ -367,7 +250,6 @@ def generate_template(data):
             perorangan_rows.append(row)
             
         else:
-            # BADAN USAHA
             required_fields = ["nama", "no_izin", "bidang_usaha", "alamat"]
             is_lengkap = all(d[f] != "-" for f in required_fields)
             
@@ -396,7 +278,7 @@ def generate_template(data):
     return df_perorangan, df_badan_usaha
 
 # ============================================================
-# 9. DOWNLOAD CSV
+# 7. DOWNLOAD CSV
 # ============================================================
 def to_csv_download(df1, df2):
     output = io.BytesIO()
@@ -405,7 +287,7 @@ def to_csv_download(df1, df2):
     return output.getvalue()
 
 # ============================================================
-# 10. UI UTAMA
+# 8. UI UTAMA
 # ============================================================
 uploaded_files = st.file_uploader(
     "Upload file .tab", 
@@ -469,25 +351,11 @@ if uploaded_files:
             st.error("❌ File M4CU tidak ditemukan!")
             st.stop()
         
-        # 2. M4CUI
+        # 2. M4CUI (PELENGKAP)
         for key in all_files.keys():
             if "M4CUI" in key:
                 st.write(f"✅ Menambahkan data dari: {key}")
                 data = extract_m4cui(all_files[key], data)
-                break
-        
-        # 3. M4CUAPU
-        for key in all_files.keys():
-            if "M4CUAPU" in key:
-                st.write(f"✅ Menambahkan data dari: {key}")
-                data = extract_m4cuapu(all_files[key], data)
-                break
-        
-        # 4. M4CUC
-        for key in all_files.keys():
-            if "M4CUC" in key:
-                st.write(f"✅ Menambahkan data dari: {key}")
-                data = extract_m4cuc(all_files[key], data)
                 break
         
         if not data:
