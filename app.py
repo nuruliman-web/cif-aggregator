@@ -428,19 +428,6 @@ if st.session_state.processed_data is not None:
 if st.button("🔄 Reset Semua", use_container_width=True):
     for key in list(st.session_state.keys()):
         if key not in ["header_mapping"]:
-            if key in ["uploaded_files", "selected_key", "selected_cols"]:
-                st.session_state[key] = {}
-            else:
-                st.session_state[key] = None
-    st.session_state.processed_data = None
-    st.session_state.show_column_selector = False
-    st.rerun()
-
-
-# ---- Reset ----
-if st.button("🔄 Reset Semua", use_container_width=True):
-    for key in list(st.session_state.keys()):
-        if key not in ["header_mapping"]:
             st.session_state[key] = {} if key in ["uploaded_files", "selected_key", "selected_cols"] else None
     st.session_state.processed_data = None
     st.session_state.show_column_selector = False
