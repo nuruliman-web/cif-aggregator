@@ -59,16 +59,18 @@ def extract_m4cu(df):
     if df is None or df.empty:
         return result
     
-    # MAPPING POSISI KOLOM M4CU (dari header Excel)
+    # MAPPING POSISI KOLOM M4CU (dari header)
     COL_CUCODE = 1      # Customer code
     COL_CUNAME = 2      # Customer Name
     COL_CUADR1 = 4      # Address-1
     COL_CUADR2 = 5      # Address-2
     COL_CUADR3 = 6      # City
     COL_CUFLTY = 31     # Customer type (I/C)
+    COL_CUIDCO = 16     # Pekerjaan (Industry Code)  ✅ dari lo
     COL_CUJEKL = 25     # Jenis kelamin
     COL_CUDTLH = 26     # Birth date
     COL_CUNKTP = 27     # ID card number
+    COL_CUNECO = 29     # Kewarganegaraan (Country) ✅ dari lo
     
     for _, row in df.iterrows():
         cif = str(row[COL_CUCODE]).strip()
@@ -87,12 +89,17 @@ def extract_m4cu(df):
             "cif": cif,
             "nama_m4cu": str(row[COL_CUNAME]).strip() if len(row) > COL_CUNAME and str(row[COL_CUNAME]).strip() not in ["", "nan"] else "-",
             "alamat_m4cu": alamat if alamat else "-",
+            "pekerjaan_m4cu": str(row[COL_CUIDCO]).strip() if len(row) > COL_CUIDCO and str(row[COL_CUIDCO]).strip() not in ["", "nan"] else "-",
+            "kewarganegaraan_m4cu": str(row[COL_CUNECO]).strip() if len(row) > COL_CUNECO and str(row[COL_CUNECO]).strip() not in ["", "nan"] else "-",
             "jk_m4cu": str(row[COL_CUJEKL]).strip() if len(row) > COL_CUJEKL and str(row[COL_CUJEKL]).strip() not in ["", "nan"] else "-",
             "tanggal_lahir_m4cu": str(row[COL_CUDTLH]).strip() if len(row) > COL_CUDTLH and str(row[COL_CUDTLH]).strip() not in ["", "nan"] else "-",
             "nik_m4cu": str(row[COL_CUNKTP]).strip() if len(row) > COL_CUNKTP and str(row[COL_CUNKTP]).strip() not in ["", "nan"] else "-",
             "jenis_nasabah": jenis if jenis not in ["", "nan"] else "",
+            # Default values
             "nama": "-",
             "alamat": "-",
+            "pekerjaan": "-",
+            "kewarganegaraan": "-",
             "jk": "-",
             "tanggal_lahir": "-",
             "nik": "-",
@@ -103,7 +110,6 @@ def extract_m4cu(df):
             "sumber_dana": "-",
             "penghasilan": "-",
             "tujuan_usaha": "-",
-            "alamat_lain": "-",
             "alamat_kantor": "-",
             "telp_kantor": "-",
             "no_izin": "-",
@@ -111,7 +117,7 @@ def extract_m4cu(df):
             "tempat_pendirian": "-",
             "tanggal_pendirian": "-",
             "bentuk_badan": "-",
-            "kewarganegaraan": "-"
+            "alamat_lain": "-"
         }
     
     return result
@@ -123,15 +129,34 @@ def extract_m4cui(df, existing_data):
     if df is None or df.empty:
         return existing_data
     
-    # MAPPING POSISI KOLOM M4CUI (dari header Excel)
-    # Perhatikan: di file M4CUI, kolom 0 = CUCODE (bukan kolom 1!)
+    # MAPPING POSISI KOLOM M4CUI (dari header)
+    # CUCODE di kolom 0, CUSHOR di 2, CUPLBR di 5, CUDTLH di 6, CUMRST di 7,
+    # CUIDNO di 19, CUINCM di 44, CUFRDN di 46,
+    # Alamat kantor: CUADP1(33), CUADP2(34), CUCITP(35), CUZIPP(36), CUPPA1(37)
+    # Telp kantor: CUPPN1(38), CUEXT1(39), CUPPA2(40), CUPPN2(41), CUEXT2(42)
+    
     COL_CUCODE = 0      # Customer code
     COL_CUSHOR = 2      # Short name (alias)
     COL_CUPLBR = 5      # Place Birth (Tempat Lahir)
-    COL_CUDTLH = 6      # Birth date (Tanggal Lahir)
-    COL_CUJEKL = 3      # Jenis kelamin
+    COL_CUDTLH = 6      # Birth date
+    COL_CUMRST = 7      # Marital Status (Status Kawin) ✅ dari lo
     COL_CUIDNO = 19     # ID Number (NIK)
-    COL_CUTOIC = 47     # Tujuan Penggunaan Dana
+    COL_CUINCM = 44     # Income per Month (Penghasilan) ✅ dari lo
+    COL_CUFRDN = 46     # Sumber Dana ✅ dari lo
+    
+    # Alamat Kantor
+    COL_CUADP1 = 33
+    COL_CUADP2 = 34
+    COL_CUCITP = 35
+    COL_CUZIPP = 36
+    COL_CUPPA1 = 37
+    
+    # Telp Kantor
+    COL_CUPPN1 = 38
+    COL_CUEXT1 = 39
+    COL_CUPPA2 = 40
+    COL_CUPPN2 = 41
+    COL_CUEXT2 = 42
     
     for _, row in df.iterrows():
         cif = str(row[COL_CUCODE]).strip()
@@ -142,25 +167,80 @@ def extract_m4cui(df, existing_data):
         alias = str(row[COL_CUSHOR]).strip() if len(row) > COL_CUSHOR and str(row[COL_CUSHOR]).strip() not in ["", "nan"] else "-"
         tempat_lahir = str(row[COL_CUPLBR]).strip() if len(row) > COL_CUPLBR and str(row[COL_CUPLBR]).strip() not in ["", "nan"] else "-"
         tgl_lahir = str(row[COL_CUDTLH]).strip() if len(row) > COL_CUDTLH and str(row[COL_CUDTLH]).strip() not in ["", "nan"] else "-"
-        jk = str(row[COL_CUJEKL]).strip() if len(row) > COL_CUJEKL and str(row[COL_CUJEKL]).strip() not in ["", "nan"] else "-"
+        status_kawin = str(row[COL_CUMRST]).strip() if len(row) > COL_CUMRST and str(row[COL_CUMRST]).strip() not in ["", "nan"] else "-"
         nik = str(row[COL_CUIDNO]).strip() if len(row) > COL_CUIDNO and str(row[COL_CUIDNO]).strip() not in ["", "nan"] else "-"
-        tujuan = str(row[COL_CUTOIC]).strip() if len(row) > COL_CUTOIC and str(row[COL_CUTOIC]).strip() not in ["", "nan"] else "-"
+        penghasilan = str(row[COL_CUINCM]).strip() if len(row) > COL_CUINCM and str(row[COL_CUINCM]).strip() not in ["", "nan"] else "-"
+        sumber_dana = str(row[COL_CUFRDN]).strip() if len(row) > COL_CUFRDN and str(row[COL_CUFRDN]).strip() not in ["", "nan"] else "-"
+        
+        # Alamat Kantor
+        alamat_kantor_parts = []
+        if len(row) > COL_CUADP1:
+            val = str(row[COL_CUADP1]).strip()
+            if val not in ["", "nan"]:
+                alamat_kantor_parts.append(val)
+        if len(row) > COL_CUADP2:
+            val = str(row[COL_CUADP2]).strip()
+            if val not in ["", "nan"]:
+                alamat_kantor_parts.append(val)
+        if len(row) > COL_CUCITP:
+            val = str(row[COL_CUCITP]).strip()
+            if val not in ["", "nan"]:
+                alamat_kantor_parts.append(val)
+        if len(row) > COL_CUZIPP:
+            val = str(row[COL_CUZIPP]).strip()
+            if val not in ["", "nan"]:
+                alamat_kantor_parts.append(val)
+        if len(row) > COL_CUPPA1:
+            val = str(row[COL_CUPPA1]).strip()
+            if val not in ["", "nan"]:
+                alamat_kantor_parts.append(val)
+        alamat_kantor = " ".join(alamat_kantor_parts) if alamat_kantor_parts else "-"
+        
+        # Telp Kantor
+        telp_kantor_parts = []
+        if len(row) > COL_CUPPN1:
+            val = str(row[COL_CUPPN1]).strip()
+            if val not in ["", "nan"]:
+                telp_kantor_parts.append(val)
+        if len(row) > COL_CUEXT1:
+            val = str(row[COL_CUEXT1]).strip()
+            if val not in ["", "nan"]:
+                telp_kantor_parts.append(val)
+        if len(row) > COL_CUPPA2:
+            val = str(row[COL_CUPPA2]).strip()
+            if val not in ["", "nan"]:
+                telp_kantor_parts.append(val)
+        if len(row) > COL_CUPPN2:
+            val = str(row[COL_CUPPN2]).strip()
+            if val not in ["", "nan"]:
+                telp_kantor_parts.append(val)
+        if len(row) > COL_CUEXT2:
+            val = str(row[COL_CUEXT2]).strip()
+            if val not in ["", "nan"]:
+                telp_kantor_parts.append(val)
+        telp_kantor = " ".join(telp_kantor_parts) if telp_kantor_parts else "-"
         
         # === GABUNG DENGAN PRIORITAS (M4CU > M4CUI) ===
         
-        # Nama: M4CU dulu, kalau kosong pakai alias dari M4CUI
+        # Nama: M4CU dulu, kalau kosong pakai alias
         if existing_data[cif]["nama_m4cu"] != "-":
             existing_data[cif]["nama"] = existing_data[cif]["nama_m4cu"]
         elif alias != "-":
             existing_data[cif]["nama"] = alias
-        else:
-            existing_data[cif]["nama"] = "-"
         
         # Alamat: M4CU dulu
         if existing_data[cif]["alamat_m4cu"] != "-":
             existing_data[cif]["alamat"] = existing_data[cif]["alamat_m4cu"]
         
-        # Tempat Lahir: dari M4CUI (M4CU gak ada)
+        # Pekerjaan: M4CU dulu
+        if existing_data[cif]["pekerjaan_m4cu"] != "-":
+            existing_data[cif]["pekerjaan"] = existing_data[cif]["pekerjaan_m4cu"]
+        
+        # Kewarganegaraan: M4CU dulu
+        if existing_data[cif]["kewarganegaraan_m4cu"] != "-":
+            existing_data[cif]["kewarganegaraan"] = existing_data[cif]["kewarganegaraan_m4cu"]
+        
+        # Tempat Lahir: dari M4CUI
         if tempat_lahir != "-":
             existing_data[cif]["tempat_lahir"] = tempat_lahir
         
@@ -176,20 +256,69 @@ def extract_m4cui(df, existing_data):
         elif nik != "-":
             existing_data[cif]["nik"] = nik
         
-        # JK: M4CU dulu, kalau kosong pakai M4CUI
+        # JK: M4CU dulu
         if existing_data[cif]["jk_m4cu"] != "-":
             existing_data[cif]["jk"] = existing_data[cif]["jk_m4cu"]
-        elif jk != "-":
-            existing_data[cif]["jk"] = jk
         
-        # Tujuan: dari M4CUI
-        if tujuan != "-":
-            existing_data[cif]["tujuan_usaha"] = tujuan
+        # Status Kawin: dari M4CUI
+        if status_kawin != "-":
+            existing_data[cif]["status_kawin"] = status_kawin
+        
+        # Sumber Dana: dari M4CUI
+        if sumber_dana != "-":
+            existing_data[cif]["sumber_dana"] = sumber_dana
+        
+        # Penghasilan: dari M4CUI
+        if penghasilan != "-":
+            existing_data[cif]["penghasilan"] = penghasilan
+        
+        # Alamat Kantor: dari M4CUI
+        if alamat_kantor != "-":
+            existing_data[cif]["alamat_kantor"] = alamat_kantor
+        
+        # Telp Kantor: dari M4CUI
+        if telp_kantor != "-":
+            existing_data[cif]["telp_kantor"] = telp_kantor
     
     return existing_data
 
 # ============================================================
-# 6. GENERATE TEMPLATE
+# 6. EKSTRAK M4CUAPU (BO)
+# ============================================================
+def extract_m4cuapu(df, existing_data):
+    if df is None or df.empty:
+        return existing_data
+    
+    # MAPPING POSISI KOLOM M4CUAPU
+    # Customer code di kolom 1, Beneficiary Owner Name di kolom 23
+    COL_CUCODE = 1
+    COL_BONAME = 23
+    
+    for _, row in df.iterrows():
+        cif = str(row[COL_CUCODE]).strip()
+        if not cif or cif in ["", "nan", "None"] or cif not in existing_data:
+            continue
+        
+        # BO Name
+        if len(row) > COL_BONAME:
+            val = str(row[COL_BONAME]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["bo"] = val
+    
+    return existing_data
+
+# ============================================================
+# 7. EKSTRAK M4CUG (Nama Ibu - nanti)
+# ============================================================
+def extract_m4cug(df, existing_data):
+    if df is None or df.empty:
+        return existing_data
+    
+    # Belum ada mapping untuk Nama Ibu
+    return existing_data
+
+# ============================================================
+# 8. GENERATE TEMPLATE
 # ============================================================
 def generate_template(data):
     perorangan_rows = []
@@ -219,6 +348,7 @@ def generate_template(data):
         jenis = d.get("jenis_nasabah", "").strip().upper()
         
         if jenis == "I":
+            # PERORANGAN
             required_fields = ["nama", "nik", "alamat", "tempat_lahir", "tanggal_lahir", 
                               "pekerjaan", "jk", "status_kawin", "nama_ibu"]
             is_lengkap = all(d[f] != "-" for f in required_fields)
@@ -250,6 +380,7 @@ def generate_template(data):
             perorangan_rows.append(row)
             
         else:
+            # BADAN USAHA
             required_fields = ["nama", "no_izin", "bidang_usaha", "alamat"]
             is_lengkap = all(d[f] != "-" for f in required_fields)
             
@@ -278,7 +409,7 @@ def generate_template(data):
     return df_perorangan, df_badan_usaha
 
 # ============================================================
-# 7. DOWNLOAD CSV
+# 9. DOWNLOAD CSV
 # ============================================================
 def to_csv_download(df1, df2):
     output = io.BytesIO()
@@ -287,7 +418,7 @@ def to_csv_download(df1, df2):
     return output.getvalue()
 
 # ============================================================
-# 8. UI UTAMA
+# 10. UI UTAMA
 # ============================================================
 uploaded_files = st.file_uploader(
     "Upload file .tab", 
@@ -356,6 +487,20 @@ if uploaded_files:
             if "M4CUI" in key:
                 st.write(f"✅ Menambahkan data dari: {key}")
                 data = extract_m4cui(all_files[key], data)
+                break
+        
+        # 3. M4CUAPU (BO)
+        for key in all_files.keys():
+            if "M4CUAPU" in key:
+                st.write(f"✅ Menambahkan data dari: {key}")
+                data = extract_m4cuapu(all_files[key], data)
+                break
+        
+        # 4. M4CUG (Nama Ibu - belum)
+        for key in all_files.keys():
+            if "M4CUG" in key:
+                st.write(f"✅ Menambahkan data dari: {key}")
+                data = extract_m4cug(all_files[key], data)
                 break
         
         if not data:
