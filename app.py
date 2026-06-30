@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import io
+import time
 
 # Import file kita
 from header import HEADER_MAPPING, get_headers_for_file
@@ -16,7 +17,7 @@ st.title("📊 Visual Data Mapper")
 st.write("Upload file .tab, pilih kolom yang mau digabung")
 
 # ============================================================
-# 2. STATE MANAGEMENT (biar gak reload ulang)
+# 2. STATE MANAGEMENT
 # ============================================================
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = {}
@@ -26,10 +27,10 @@ if "selected_cols" not in st.session_state:
     st.session_state.selected_cols = {}
 if "processed_data" not in st.session_state:
     st.session_state.processed_data = None
-if "file_headers" not in st.session_state:
-    st.session_state.file_headers = {}  # Simpan header biar gak reload
 if "data_loaded" not in st.session_state:
     st.session_state.data_loaded = False
+if "show_column_selector" not in st.session_state:
+    st.session_state.show_column_selector = False
 
 # ============================================================
 # 3. FUNGSI BANTUAN
@@ -51,22 +52,36 @@ def make_unique_headers(headers):
     return unique_headers
 
 def render_checkbox_columns(headers, key_prefix, default_selected):
-    """Render kolom pilihan pake checkbox di columns"""
+    """Render kolom pilihan pake checkbox di columns (tanpa auto-reload)"""
     selected = []
-    cols = st.columns(4)  # 4 kolom per baris
+    cols = st.columns(4)
+    
+    # Simpan state checkbox di session_state
+    checkbox_key = f"checkbox_{key_prefix}"
+    if checkbox_key not in st.session_state:
+        st.session_state[checkbox_key] = default_selected
     
     for i, h in enumerate(headers):
         col_idx = i % 4
-        is_checked = i in default_selected
+        is_checked = i in st.session_state[checkbox_key]
         with cols[col_idx]:
-            if st.checkbox(
+            # Pake checkbox dengan key unik
+            checked = st.checkbox(
                 h, 
                 value=is_checked, 
-                key=f"{key_prefix}_col_{i}"
-            ):
-                selected.append(i)
+                key=f"{key_prefix}_cb_{i}",
+                label_visibility="collapsed" if len(h) > 20 else "visible"
+            )
+            if checked and i not in st.session_state[checkbox_key]:
+                st.session_state[checkbox_key].append(i)
+            elif not checked and i in st.session_state[checkbox_key]:
+                st.session_state[checkbox_key].remove(i)
+            
+            # Tampilkan nama kolom (pendek)
+            display_name = h[:25] + "..." if len(h) > 25 else h
+            st.caption(display_name)
     
-    return selected
+    return st.session_state[checkbox_key]
 
 # ============================================================
 # 4. UI UTAMA
@@ -80,16 +95,23 @@ data_files = st.file_uploader(
     key="data_uploader"
 )
 
-# Tombol untuk load data (biar gak auto-load)
+# ---- Tombol Load Data dengan Progress ----
 col1, col2 = st.columns([1, 4])
 with col1:
-    load_button = st.button("📥 Load Data", use_container_width=True)
+    load_button = st.button("📥 Load Data", use_container_width=True, type="primary")
 
-if load_button or st.session_state.data_loaded:
-    if data_files:
-        st.session_state.data_loaded = True
+if load_button:
+    if not data_files:
+        st.warning("⚠️ Upload file .tab dulu!")
+    else:
         with st.spinner("⏳ Membaca file..."):
-            for file in data_files:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            total_files = len(data_files)
+            for idx, file in enumerate(data_files):
+                status_text.text(f"Memproses: {file.name}")
+                
                 raw_name = file.name
                 if raw_name.endswith(".tab"):
                     raw_name = raw_name[:-4]
@@ -99,6 +121,7 @@ if load_button or st.session_state.data_loaded:
                 
                 # Skip kalau udah di-load
                 if key in st.session_state.uploaded_files:
+                    progress_bar.progress((idx + 1) / total_files)
                     continue
                 
                 df = parse_tab_file(file)
@@ -126,17 +149,27 @@ if load_button or st.session_state.data_loaded:
                         "file_name": file.name,
                         "matched_sheet": key
                     }
-                    st.success(f"✅ {file.name}: {len(df)} baris, {len(df.columns)} kolom → Match: {key}")
-                else:
-                    st.warning(f"⚠️ {file.name}: Kosong atau tidak terbaca")
-        
-        st.rerun()
+                    st.session_state.data_loaded = True
+                    st.session_state.show_column_selector = True
+                
+                # Update progress
+                progress_bar.progress((idx + 1) / total_files)
+                time.sleep(0.1)  # Biar keliatan progressnya
+            
+            status_text.text("✅ Selesai!")
+            progress_bar.empty()
+            st.rerun()
 
-# ---- Tampilkan file yang sudah di-load ----
+# ---- Tampilkan status file yang sudah di-load ----
 if st.session_state.uploaded_files:
     st.info(f"📁 {len(st.session_state.uploaded_files)} file sudah di-load")
     
-    # ---- Pilih Kolom Kunci ----
+    # Tampilkan ringkasan file
+    for key, info in st.session_state.uploaded_files.items():
+        st.write(f"  ✅ {info['file_name']}: {len(info['df'])} baris, {len(info['headers'])} kolom")
+
+# ---- Pilih Kolom Kunci (muncul setelah load) ----
+if st.session_state.show_column_selector and st.session_state.uploaded_files:
     st.subheader("🔑 Pilih Kolom Kunci (CIF)")
     
     for key, info in st.session_state.uploaded_files.items():
@@ -166,7 +199,6 @@ if st.session_state.uploaded_files:
                 default_idx = i
                 break
         
-        # Pake radio atau selectbox? Tetep pake selectbox tapi kecil
         selected_idx = st.selectbox(
             f"Pilih kolom kunci untuk {file_name}",
             options=list(col_options.keys()),
@@ -178,39 +210,65 @@ if st.session_state.uploaded_files:
         st.write("---")
 
 # ---- Pilih Kolom yang Mau Dibawa (pake checkbox) ----
-if st.session_state.uploaded_files and all(v is not None for v in st.session_state.selected_key.values()):
-    st.subheader("📋 Pilih Kolom yang Mau Digabung (Checkbox)")
+if st.session_state.show_column_selector and st.session_state.uploaded_files and all(v is not None for v in st.session_state.selected_key.values()):
+    st.subheader("📋 Pilih Kolom yang Mau Digabung")
     st.caption("💡 Centang kolom yang mau dibawa dari setiap file")
     
-    # Cek apakah ada perubahan di selected_cols
-    for key, info in st.session_state.uploaded_files.items():
-        headers = info["headers"]
-        file_name = info["file_name"]
-        key_col = st.session_state.selected_key[key]
+    # Gunakan form biar gak reload tiap kali checkbox diclick
+    with st.form(key="column_selection_form"):
+        for key, info in st.session_state.uploaded_files.items():
+            headers = info["headers"]
+            file_name = info["file_name"]
+            key_col = st.session_state.selected_key[key]
+            
+            st.write(f"**📋 {file_name}** (Kunci: {headers[key_col] if key_col < len(headers) else f'Kolom {key_col}'})")
+            
+            # Default: pilih key + 2 kolom pertama
+            if key not in st.session_state.selected_cols:
+                default_cols = [key_col]
+                count = 0
+                for i in range(len(headers)):
+                    if i != key_col and count < 2:
+                        default_cols.append(i)
+                        count += 1
+                st.session_state.selected_cols[key] = default_cols
+            
+            # Render checkbox di columns
+            checkbox_key = f"form_checkbox_{key}"
+            if checkbox_key not in st.session_state:
+                st.session_state[checkbox_key] = st.session_state.selected_cols.get(key, [key_col])
+            
+            # Render checkbox
+            selected = []
+            cols = st.columns(4)
+            for i, h in enumerate(headers):
+                col_idx = i % 4
+                is_checked = i in st.session_state[checkbox_key]
+                with cols[col_idx]:
+                    checked = st.checkbox(
+                        f"{i}: {h[:20]}..." if len(h) > 20 else f"{i}: {h}",
+                        value=is_checked,
+                        key=f"form_{key}_cb_{i}"
+                    )
+                    if checked:
+                        selected.append(i)
+            
+            st.session_state[checkbox_key] = selected
+            st.write("---")
         
-        st.write(f"**📋 {file_name}** (Kunci: {headers[key_col] if key_col < len(headers) else f'Kolom {key_col}'})")
+        # Submit button
+        submitted = st.form_submit_button("✅ Simpan Pilihan Kolom", use_container_width=True, type="primary")
         
-        # Default: pilih key + 2 kolom pertama
-        if key not in st.session_state.selected_cols:
-            default_cols = [key_col]
-            count = 0
-            for i in range(len(headers)):
-                if i != key_col and count < 2:
-                    default_cols.append(i)
-                    count += 1
-            st.session_state.selected_cols[key] = default_cols
-        
-        # Render checkbox di columns
-        selected = render_checkbox_columns(
-            headers=headers,
-            key_prefix=f"col_{key}",
-            default_selected=st.session_state.selected_cols.get(key, [key_col])
-        )
-        st.session_state.selected_cols[key] = selected
-        st.write("---")
+        if submitted:
+            for key in st.session_state.uploaded_files.keys():
+                checkbox_key = f"form_checkbox_{key}"
+                if checkbox_key in st.session_state:
+                    st.session_state.selected_cols[key] = st.session_state[checkbox_key]
+            st.success("✅ Pilihan kolom disimpan!")
+            st.rerun()
 
-# ---- Proses Gabung (dengan tombol) ----
-if st.session_state.uploaded_files and all(v is not None for v in st.session_state.selected_key.values()):
+# ---- Proses Gabung ----
+if st.session_state.show_column_selector and st.session_state.uploaded_files and all(v is not None for v in st.session_state.selected_key.values()):
     # Cek apakah ada pilihan kolom yang dipilih
     has_selection = False
     for key in st.session_state.uploaded_files.keys():
@@ -219,7 +277,7 @@ if st.session_state.uploaded_files and all(v is not None for v in st.session_sta
             break
     
     if has_selection:
-        if st.button("🚀 Gabungkan Data", use_container_width=True):
+        if st.button("🚀 Gabungkan Data", use_container_width=True, type="primary"):
             with st.spinner("⏳ Memproses..."):
                 try:
                     first_key = list(st.session_state.uploaded_files.keys())[0]
@@ -240,7 +298,7 @@ if st.session_state.uploaded_files and all(v is not None for v in st.session_sta
                     # Ambil kolom lain dari file pertama (kecuali CIF)
                     for col_idx in first_selected_cols:
                         if col_idx == first_key_col:
-                            continue  # Skip CIF, udah diambil di atas
+                            continue
                         col_name = first_headers[col_idx] if col_idx < len(first_headers) else f"Kolom_{col_idx}"
                         final_name = f"{first_info['file_name']}_{col_name}"
                         result_headers.append(final_name)
@@ -261,7 +319,7 @@ if st.session_state.uploaded_files and all(v is not None for v in st.session_sta
                         
                         for col_idx in selected_cols:
                             if col_idx == key_col:
-                                continue  # Skip CIF dari file lain
+                                continue
                             col_name = headers[col_idx] if col_idx < len(headers) else f"Kolom_{col_idx}"
                             final_name = f"{info['file_name']}_{col_name}"
                             result_headers.append(final_name)
@@ -331,7 +389,8 @@ if st.session_state.processed_data is not None:
 # ---- Reset ----
 if st.button("🔄 Reset Semua", use_container_width=True):
     for key in list(st.session_state.keys()):
-        st.session_state[key] = {} if key in ["uploaded_files", "selected_key", "selected_cols", "file_headers"] else None
+        st.session_state[key] = {} if key in ["uploaded_files", "selected_key", "selected_cols"] else None
     st.session_state.processed_data = None
     st.session_state.data_loaded = False
+    st.session_state.show_column_selector = False
     st.rerun()
