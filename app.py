@@ -102,39 +102,37 @@ def extract_m4cu(df):
     return result
 
 # ============================================================
-# 5. EKSTRAK M4CUI - VERSI DENGAN DEBUG
+# 5. EKSTRAK M4CUI - DENGAN DEBUG
 # ============================================================
 def extract_m4cui(df, existing_data):
     if df is None or df.empty:
         return existing_data
     
-    # TAMPILKAN DEBUG: 5 baris pertama + semua kolom
-    st.write("🔍 DEBUG M4CUI:")
+    # DEBUG: tampilkan di Streamlit
+    st.subheader("🔍 DEBUG M4CUI")
     st.write(f"Total baris: {len(df)}, Total kolom: {len(df.columns)}")
     
-    # Tampilkan 3 baris pertama dari kolom yang penting
-    sample_cols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 19, 20, 30, 31, 44, 45, 46]
-    sample_data = {}
-    for col in sample_cols:
+    # Tampilkan 5 baris pertama dari semua kolom yang penting
+    debug_cols = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 19, 20, 30, 31, 44, 45, 46]
+    debug_data = {}
+    for col in debug_cols:
         if col < len(df.columns):
-            sample_data[f"Kolom {col}"] = df[col].head(3).tolist()
+            # Ambil 5 sample
+            samples = []
+            for i in range(min(5, len(df))):
+                val = str(df.iloc[i, col]).strip()
+                if val and val not in ["", "nan", "None"]:
+                    samples.append(val)
+            if samples:
+                debug_data[f"Kolom {col}"] = samples[:3]  # Tampilkan max 3
     
-    st.write("📌 Sample 3 baris pertama dari kolom penting:")
-    st.json(sample_data)
+    if debug_data:
+        st.write("📌 Sample data dari kolom-kolom penting:")
+        st.json(debug_data)
+    else:
+        st.warning("⚠️ Tidak ada data di kolom-kolom yang dicek!")
     
-    # Sekarang kita coba mapping berdasarkan data yang terlihat
-    # Dari debug sebelumnya, kita tahu:
-    # Kolom 1 = CUCODE
-    # Kolom 2 = Nama (CUSHOR/CUNAME)
-    # Kolom 5 = Tempat Lahir (CUPLBR)
-    # Kolom 6 = Tanggal Lahir (CUDTLH)
-    # Kolom 19 = NIK (CUIDNO)
-    # Kolom 3 = JK (CUJEKL)
-    # Kolom 7 = Status Kawin (CUMRST)
-    # Kolom 45 = Sumber Dana (CUFRDN)
-    # Kolom 44 = Penghasilan (CUINCM)
-    # Kolom 46 = Tujuan (CUTOIC)
-    
+    # Mapping posisi kolom (berdasarkan header file Excel)
     COL_CUCODE = 1
     COL_CUSHOR = 2
     COL_CUPLBR = 5
@@ -215,6 +213,7 @@ def extract_m4cuapu(df, existing_data):
     if df is None or df.empty:
         return existing_data
     
+    # Cari kolom Customer Code
     cu_col = None
     for col in df.columns:
         col_clean = str(col).strip().upper()
@@ -374,13 +373,20 @@ def generate_template(data):
     return df_perorangan, df_badan_usaha
 
 # ============================================================
-# 9. DOWNLOAD EXCEL
+# 9. DOWNLOAD EXCEL - PAKAI XLSXWRITER
 # ============================================================
 def to_excel_download(df1, df2):
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df1.to_excel(writer, sheet_name='Perorangan', index=False)
-        df2.to_excel(writer, sheet_name='Badan Usaha', index=False)
+    try:
+        # Coba pake xlsxwriter (lebih ringan)
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df1.to_excel(writer, sheet_name='Perorangan', index=False)
+            df2.to_excel(writer, sheet_name='Badan Usaha', index=False)
+    except:
+        # Fallback ke openpyxl
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df1.to_excel(writer, sheet_name='Perorangan', index=False)
+            df2.to_excel(writer, sheet_name='Badan Usaha', index=False)
     return output.getvalue()
 
 # ============================================================
