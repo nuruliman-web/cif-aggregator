@@ -12,17 +12,36 @@ st.title("📊 CIF Data Aggregator")
 st.write("Upload file .tab dari core banking untuk digabung datanya")
 
 # ============================================================
-# 2. FUNGSI BACA FILE .tab (semua sheet)
+# 2. FUNGSI BACA FILE .tab (dengan fallback encoding)
 # ============================================================
 def parse_tab_file(uploaded_file):
     """Baca file .tab yang berisi multiple sheet (mirip file Excel)"""
     data = {}
-    content = uploaded_file.read().decode("utf-8")
+    
+    # Coba berbagai encoding
+    encodings = ["utf-8", "latin-1", "cp1252", "iso-8859-1"]
+    content = None
+    
+    for enc in encodings:
+        try:
+            uploaded_file.seek(0)  # Reset ke awal
+            content = uploaded_file.read().decode(enc, errors="replace")
+            break
+        except:
+            continue
+    
+    if content is None:
+        # Fallback: baca sebagai bytes dan ganti karakter bermasalah
+        uploaded_file.seek(0)
+        raw = uploaded_file.read()
+        content = raw.decode("utf-8", errors="ignore")
+    
     lines = content.splitlines()
     
     current_sheet = None
     sheet_data = []
     is_header = False
+    header_cols = []
     
     for line in lines:
         line = line.strip()
@@ -33,40 +52,63 @@ def parse_tab_file(uploaded_file):
         if line.startswith("> metadata.sheet_name:"):
             # Simpan sheet sebelumnya
             if current_sheet and sheet_data:
-                data[current_sheet] = pd.DataFrame(sheet_data)
+                try:
+                    if header_cols and len(header_cols) > 0:
+                        # Bersihin header
+                        clean_header = [c.replace("_", " ").strip() for c in header_cols]
+                        # Buat dataframe dengan header
+                        df = pd.DataFrame(sheet_data)
+                        if len(df.columns) >= len(clean_header):
+                            df.columns = clean_header[:len(df.columns)]
+                        # Hapus baris yang semua nilainya kosong
+                        df = df.replace(r'^\s*$', '', regex=True)
+                        df = df.replace(r'^nan$', '', regex=True)
+                        df = df.dropna(how='all')
+                        if not df.empty:
+                            data[current_sheet] = df
+                except Exception as e:
+                    # Kalau error, simpan raw dulu
+                    pass
             # Mulai sheet baru
             current_sheet = line.split(":")[1].strip()
             sheet_data = []
+            header_cols = []
             is_header = True
             continue
             
         # Deteksi header kolom (baris pertama setelah sheet name)
         if is_header and current_sheet:
-            # Header biasanya diawali "| A | B | C | ..."
             if line.startswith("|") and "|" in line:
-                # Ambil semua kolom dari header
                 cols = [c.strip() for c in line.split("|")[1:-1]]
-                # Filter kolom yang gak kosong
                 cols = [c for c in cols if c and not c.startswith("metadata")]
                 if cols:
-                    sheet_data.append(cols)
-                is_header = False
+                    header_cols = cols
+                    is_header = False
             continue
             
         # Data baris (diawali pipe)
-        if line.startswith("|") and current_sheet:
+        if line.startswith("|") and current_sheet and header_cols:
             row = [c.strip() for c in line.split("|")[1:-1]]
             if row:
+                # Potong atau tambah biar sesuai header
+                while len(row) < len(header_cols):
+                    row.append("")
                 sheet_data.append(row)
     
     # Simpan sheet terakhir
-    if current_sheet and sheet_data:
-        # Pastikan semua baris punya panjang yang sama
-        max_cols = max(len(row) for row in sheet_data)
-        for row in sheet_data:
-            while len(row) < max_cols:
-                row.append("")
-        data[current_sheet] = pd.DataFrame(sheet_data[1:], columns=sheet_data[0] if len(sheet_data) > 1 else None)
+    if current_sheet and sheet_data and header_cols:
+        try:
+            clean_header = [c.replace("_", " ").strip() for c in header_cols]
+            df = pd.DataFrame(sheet_data)
+            if len(df.columns) >= len(clean_header):
+                df.columns = clean_header[:len(df.columns)]
+            df = df.replace(r'^\s*$', '', regex=True)
+            df = df.replace(r'^nan$', '', regex=True)
+            df = df.dropna(how='all')
+            if not df.empty:
+                data[current_sheet] = df
+        except:
+            pass
     
     return data
 
@@ -80,7 +122,12 @@ def get_best_value(values, prefer_text=True):
     - prefer_text=False: pilih nilai pertama yang gak kosong
     """
     # Filter nilai kosong
-    valid = [v for v in values if v and str(v).strip() and str(v).strip() != "-"]
+    valid = []
+    for v in values:
+        v_str = str(v).strip()
+        if v_str and v_str not in ["", "nan", "None", "-", "0", "0000", "NULL"]:
+            valid.append(v_str)
+    
     if not valid:
         return "-"
     
@@ -113,26 +160,26 @@ def extract_cif_data(sheets):
         
         for col in m4cu.columns:
             col_clean = col.strip().upper()
-            if col_clean in ["CUCODE", "CUSTOMER CODE"]:
+            if col_clean in ["CUCODE", "CUSTOMER CODE", "CUSTAT"]:
                 cu_col = col
             elif col_clean in ["CUNAME", "CUSTOMER NAME"]:
                 name_col = col
             elif col_clean in ["CUFLTY", "CUSTOMER TYPE"]:
                 type_col = col
-            elif col_clean.startswith("CUADR"):
+            elif col_clean.startswith("CUADR") or "ADDRESS" in col_clean:
                 addr_cols.append(col)
         
         if cu_col is not None:
             for _, row in m4cu.iterrows():
                 cif = str(row[cu_col]).strip()
-                if not cif or cif == "nan":
+                if not cif or cif in ["", "nan", "None"]:
                     continue
                     
                 result[cif] = {
                     "sources": ["M4CU"],
                     "cif": cif,
                     "nama": get_best_value([row[name_col]] if name_col else ["-"]),
-                    "jenis_nasabah": str(row[type_col]).strip() if type_col else "",
+                    "jenis_nasabah": str(row[type_col]).strip() if type_col and str(row[type_col]).strip() not in ["", "nan"] else "",
                     "alamat": " ".join([str(row[c]).strip() for c in addr_cols if str(row[c]).strip() not in ["", "nan"]]),
                     "pekerjaan": "-",
                     "tempat_lahir": "-",
@@ -157,22 +204,24 @@ def extract_cif_data(sheets):
                 }
     
     # ============================================================
-    # 3b. TAMBAH DATA DARI M4CUI
+    # 3b. TAMBAH DATA DARI M4CUI (atau M4CU1)
     # ============================================================
     m4cui = sheets.get("M4CUI")
+    if m4cui is None or m4cui.empty:
+        m4cui = sheets.get("M4CU1")  # Coba alternatif nama
+    
     if m4cui is not None and not m4cui.empty:
+        cu_col = None
         for col in m4cui.columns:
             col_clean = col.strip().upper()
             if col_clean in ["CUCODE", "CUSTOMER CODE"]:
                 cu_col = col
                 break
-        else:
-            cu_col = None
         
         if cu_col is not None:
             for _, row in m4cui.iterrows():
                 cif = str(row[cu_col]).strip()
-                if cif not in result:
+                if cif not in result or cif in ["", "nan"]:
                     continue
                 
                 # Kumpulkan nilai dari berbagai kolom
@@ -194,94 +243,124 @@ def extract_cif_data(sheets):
                 }
                 
                 for key, val_list in vals.items():
-                    if val_list and str(val_list[0]).strip() not in ["", "nan", "-"]:
+                    if val_list:
                         current = result[cif].get(key, "-")
-                        if current == "-" or len(str(val_list[0])) > len(str(current)):
-                            result[cif][key] = get_best_value(val_list)
+                        new_val = get_best_value(val_list)
+                        if new_val != "-":
+                            if current == "-" or len(str(new_val)) > len(str(current)):
+                                result[cif][key] = new_val
     
     # ============================================================
-    # 3c. TAMBAH DATA DARI M4CUGE (ibu kandung, dll)
+    # 3c. TAMBAH DATA DARI M4CU.G (atau M4CUGE)
     # ============================================================
-    m4cuge = sheets.get("M4CUGE")
+    m4cuge = sheets.get("M4CU.G")
+    if m4cuge is None or m4cuge.empty:
+        m4cuge = sheets.get("M4CUGE")
+    
     if m4cuge is not None and not m4cuge.empty:
+        cu_col = None
         for col in m4cuge.columns:
-            if col.strip().upper() in ["CUCODE", "CUSTOMER CODE"]:
+            col_clean = col.strip().upper()
+            if col_clean in ["CUCODE", "CUSTOMER CODE"]:
                 cu_col = col
                 break
-        else:
-            cu_col = None
         
         if cu_col is not None:
             for _, row in m4cuge.iterrows():
                 cif = str(row[cu_col]).strip()
-                if cif not in result:
+                if cif not in result or cif in ["", "nan"]:
                     continue
                 
-                if row.get("CUIBUN"):
-                    result[cif]["nama_ibu"] = get_best_value([row.get("CUIBUN", "-")])
-                if row.get("CUNAME2"):
+                if "CUIBUN" in row and str(row["CUIBUN"]).strip() not in ["", "nan"]:
+                    result[cif]["nama_ibu"] = get_best_value([result[cif]["nama_ibu"], row.get("CUIBUN", "-")])
+                if "CUNAME2" in row and str(row["CUNAME2"]).strip() not in ["", "nan"]:
                     result[cif]["nama"] = get_best_value([result[cif]["nama"], row.get("CUNAME2", "-")])
     
     # ============================================================
-    # 3d. TAMBAH DATA DARI M4CUAPPU (BO, sumber dana, tujuan)
+    # 3d. TAMBAH DATA DARI M4CUAPU (atau M4CUAPPU)
     # ============================================================
-    m4cuappu = sheets.get("M4CUAPPU")
+    m4cuappu = sheets.get("M4CUAPU")
+    if m4cuappu is None or m4cuappu.empty:
+        m4cuappu = sheets.get("M4CUAPPU")
+    
     if m4cuappu is not None and not m4cuappu.empty:
+        cu_col = None
         for col in m4cuappu.columns:
             col_clean = col.strip().upper()
             if col_clean in ["CUSTOMER CODE", "CUCODE"]:
                 cu_col = col
                 break
-        else:
-            cu_col = None
         
         if cu_col is not None:
             for _, row in m4cuappu.iterrows():
                 cif = str(row[cu_col]).strip()
-                if cif not in result:
+                if cif not in result or cif in ["", "nan"]:
                     continue
                 
-                if row.get("Beneficiary Owner"):
-                    result[cif]["bo"] = get_best_value([row.get("Beneficiary Owner", "-"), row.get("Beneficiary Owner Name", "-")])
-                if row.get("Sumber Dana"):
-                    result[cif]["sumber_dana"] = get_best_value([result[cif]["sumber_dana"], row.get("Sumber Dana", "-")])
-                if row.get("Tujuan Penggunaan Dana"):
-                    result[cif]["tujuan_usaha"] = get_best_value([result[cif]["tujuan_usaha"], row.get("Tujuan Penggunaan Dana", "-")])
-                if row.get("Rata-Rata Penghasilan"):
-                    result[cif]["penghasilan"] = get_best_value([result[cif]["penghasilan"], row.get("Rata-Rata Penghasilan", "-")])
-                if row.get("Bidang Usaha"):
-                    result[cif]["bidang_usaha"] = row.get("Bidang Usaha", "-")
-                if row.get("Bentuk Usaha"):
-                    result[cif]["bentuk_badan"] = row.get("Bentuk Usaha", "-")
-                if row.get("No. Izin Usaha"):
-                    result[cif]["no_izin"] = row.get("No. Izin Usaha", "-")
+                if "Beneficiary Owner" in row:
+                    bo_val = get_best_value([row.get("Beneficiary Owner", "-"), row.get("Beneficiary Owner Name", "-")])
+                    if bo_val != "-":
+                        result[cif]["bo"] = bo_val
+                if "Sumber Dana" in row:
+                    val = str(row["Sumber Dana"]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["sumber_dana"] = get_best_value([result[cif]["sumber_dana"], val])
+                if "Tujuan Penggunaan Dana" in row:
+                    val = str(row["Tujuan Penggunaan Dana"]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["tujuan_usaha"] = get_best_value([result[cif]["tujuan_usaha"], val])
+                if "Rata-Rata Penghasilan" in row:
+                    val = str(row["Rata-Rata Penghasilan"]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["penghasilan"] = get_best_value([result[cif]["penghasilan"], val])
+                if "Bidang Usaha" in row:
+                    val = str(row["Bidang Usaha"]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["bidang_usaha"] = val
+                if "Bentuk Usaha" in row:
+                    val = str(row["Bentuk Usaha"]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["bentuk_badan"] = val
+                if "No. Izin Usaha" in row:
+                    val = str(row["No. Izin Usaha"]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["no_izin"] = val
     
     # ============================================================
-    # 3e. TAMBAH DATA DARI M4CUC (badan usaha)
+    # 3e. TAMBAH DATA DARI M4CU.C
     # ============================================================
-    m4cuc = sheets.get("M4CUC")
+    m4cuc = sheets.get("M4CU.C")
     if m4cuc is not None and not m4cuc.empty:
+        cu_col = None
         for col in m4cuc.columns:
-            if col.strip().upper() in ["CIF", "CUCODE", "CUSTOMER CODE"]:
+            col_clean = col.strip().upper()
+            if col_clean in ["CIF", "CUCODE", "CUSTOMER CODE"]:
                 cu_col = col
                 break
-        else:
-            cu_col = None
         
         if cu_col is not None:
             for _, row in m4cuc.iterrows():
                 cif = str(row[cu_col]).strip()
-                if cif not in result:
+                if cif not in result or cif in ["", "nan"]:
                     continue
                 
-                if row.get("Bidang Usaha"):
-                    result[cif]["bidang_usaha"] = get_best_value([result[cif]["bidang_usaha"], row.get("Bidang Usaha", "-")])
-                if row.get("Bentuk Usaha"):
-                    result[cif]["bentuk_badan"] = get_best_value([result[cif]["bentuk_badan"], row.get("Bentuk Usaha", "-")])
-                if row.get("Nomor Ijin Usaha"):
-                    result[cif]["no_izin"] = get_best_value([result[cif]["no_izin"], row.get("Nomor Ijin Usaha", "-")])
-                if row.get("Tanggal Berdiri"):
-                    result[cif]["tanggal_pendirian"] = row.get("Tanggal Berdiri", "-")
+                if "Bidang Usaha" in row:
+                    val = str(row["Bidang Usaha"]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["bidang_usaha"] = get_best_value([result[cif]["bidang_usaha"], val])
+                if "Bentuk Usaha" in row:
+                    val = str(row["Bentuk Usaha"]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["bentuk_badan"] = get_best_value([result[cif]["bentuk_badan"], val])
+                if "Nomor Ijin Usaha" in row or "Nomor Izin Usaha" in row:
+                    col_name = "Nomor Ijin Usaha" if "Nomor Ijin Usaha" in row else "Nomor Izin Usaha"
+                    val = str(row[col_name]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["no_izin"] = get_best_value([result[cif]["no_izin"], val])
+                if "Tanggal Berdiri" in row:
+                    val = str(row["Tanggal Berdiri"]).strip()
+                    if val not in ["", "nan"]:
+                        result[cif]["tanggal_pendirian"] = val
     
     return result
 
@@ -393,7 +472,7 @@ def to_excel_download(df1, df2):
 uploaded_files = st.file_uploader(
     "Upload file .tab", 
     accept_multiple_files=True, 
-    type=["tab"]
+    type=["tab", "txt"]
 )
 
 if uploaded_files:
@@ -402,15 +481,27 @@ if uploaded_files:
     with st.spinner("⏳ Memproses data..."):
         all_sheets = {}
         for file in uploaded_files:
-            sheets = parse_tab_file(file)
-            for sheet_name, df in sheets.items():
-                if sheet_name not in all_sheets:
-                    all_sheets[sheet_name] = df
-                else:
-                    all_sheets[sheet_name] = pd.concat([all_sheets[sheet_name], df], ignore_index=True)
+            try:
+                sheets = parse_tab_file(file)
+                for sheet_name, df in sheets.items():
+                    if sheet_name not in all_sheets:
+                        all_sheets[sheet_name] = df
+                    else:
+                        all_sheets[sheet_name] = pd.concat([all_sheets[sheet_name], df], ignore_index=True)
+            except Exception as e:
+                st.warning(f"⚠️ Gagal baca file {file.name}: {str(e)[:100]}")
+                continue
+        
+        if not all_sheets:
+            st.error("❌ Tidak ada data yang bisa diproses. Pastikan file .tab berisi data.")
+            st.stop()
         
         # Ekstrak data per CIF
         data = extract_cif_data(all_sheets)
+        
+        if not data:
+            st.error("❌ Tidak ada CIF ditemukan. Pastikan file M4CU ada.")
+            st.stop()
         
         # Generate template
         df_perorangan, df_badan_usaha = generate_template(data)
@@ -421,16 +512,25 @@ if uploaded_files:
     tab1, tab2 = st.tabs(["👤 Perorangan", "🏢 Badan Usaha"])
     
     with tab1:
-        st.dataframe(df_perorangan, use_container_width=True)
+        if not df_perorangan.empty:
+            st.dataframe(df_perorangan, use_container_width=True)
+            st.caption(f"Total Perorangan: {len(df_perorangan)}")
+        else:
+            st.info("Tidak ada data Perorangan")
     
     with tab2:
-        st.dataframe(df_badan_usaha, use_container_width=True)
+        if not df_badan_usaha.empty:
+            st.dataframe(df_badan_usaha, use_container_width=True)
+            st.caption(f"Total Badan Usaha: {len(df_badan_usaha)}")
+        else:
+            st.info("Tidak ada data Badan Usaha")
     
     # Tombol download
-    excel_data = to_excel_download(df_perorangan, df_badan_usaha)
-    st.download_button(
-        label="📥 Download Excel",
-        data=excel_data,
-        file_name="CIF_Data_Aggregator.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    if not df_perorangan.empty or not df_badan_usaha.empty:
+        excel_data = to_excel_download(df_perorangan, df_badan_usaha)
+        st.download_button(
+            label="📥 Download Excel",
+            data=excel_data,
+            file_name="CIF_Data_Aggregator.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
