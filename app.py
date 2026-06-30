@@ -107,7 +107,8 @@ def extract_m4cu(df):
             "bidang_usaha": "-",
             "tempat_pendirian": "-",
             "tanggal_pendirian": "-",
-            "bentuk_badan": "-"
+            "bentuk_badan": "-",
+            "kewarganegaraan": "-"
         }
     
     return result
@@ -179,7 +180,7 @@ def extract_m4cui(df, existing_data):
     return existing_data
 
 # ============================================================
-# 6. EKSTRAK M4CUG (Nama Ibu, Nama Alias, dll)
+# 6. EKSTRAK M4CUG
 # ============================================================
 def extract_m4cug(df, existing_data):
     if df is None or df.empty:
@@ -188,7 +189,6 @@ def extract_m4cug(df, existing_data):
     # MAPPING POSISI KOLOM M4CUG (dari header)
     COL_CUCODE = 1      # Customer code
     COL_CUNAME = 2      # Customer Name
-    # M4CUG punya CUNAME, CUADR1-5, CUMBLN (seluler)
     
     for _, row in df.iterrows():
         cif = str(row[COL_CUCODE]).strip()
@@ -204,24 +204,13 @@ def extract_m4cug(df, existing_data):
     return existing_data
 
 # ============================================================
-# 7. EKSTRAK M4CUAPU (BO, Sumber Dana, Tujuan, TTL, Status Kawin, Penghasilan)
+# 7. EKSTRAK M4CUAPU
 # ============================================================
 def extract_m4cuapu(df, existing_data):
     if df is None or df.empty:
         return existing_data
     
     # MAPPING POSISI KOLOM M4CUAPU (dari header)
-    # Kolom 1 = Customer code (CIF)
-    # Kolom 22 = Beneficiary Owner
-    # Kolom 23 = Beneficiary Owner Name
-    # Kolom 33 = Sumber Dana
-    # Kolom 35 = Tujuan Penggunaan Dana
-    # Kolom 41 = Jenis Kelamin
-    # Kolom 43 = Tempat Lahir
-    # Kolom 44 = Tgl Lahir
-    # Kolom 45 = Status Perkawinan
-    # Kolom 48 = Rata-Rata Penghasilan
-    
     COL_CUCODE = 1
     COL_BO = 22
     COL_BONAME = 23
@@ -346,13 +335,30 @@ def extract_m4cuc(df, existing_data):
     return existing_data
 
 # ============================================================
-# 9. GENERATE TEMPLATE
+# 9. GENERATE TEMPLATE (DENGAN VALIDASI)
 # ============================================================
 def generate_template(data):
     perorangan_rows = []
     badan_usaha_rows = []
     
     for cif, d in data.items():
+        # Pastikan semua field ada, kalau gak ada isi "-"
+        default = {
+            "nama": "-", "nik": "-", "alamat": "-", "alamat_lain": "-",
+            "tempat_lahir": "-", "tanggal_lahir": "-", "kewarganegaraan": "-",
+            "pekerjaan": "-", "alamat_kantor": "-", "telp_kantor": "-",
+            "jk": "-", "status_kawin": "-", "nama_ibu": "-",
+            "bo": "-", "sumber_dana": "-", "penghasilan": "-",
+            "tujuan_usaha": "-", "no_izin": "-", "bidang_usaha": "-",
+            "tempat_pendirian": "-", "tanggal_pendirian": "-", "bentuk_badan": "-",
+            "jenis_nasabah": ""
+        }
+        
+        # Update dengan data yang ada
+        for key in default:
+            if key not in d:
+                d[key] = default[key]
+        
         jenis = d.get("jenis_nasabah", "").strip().upper()
         
         if jenis == "I":
@@ -392,6 +398,7 @@ def generate_template(data):
             perorangan_rows.append(row)
             
         else:
+            # Badan Usaha (C atau kosong)
             required_fields = ["nama", "no_izin", "bidang_usaha", "alamat"]
             is_lengkap = all(d[f] != "-" for f in required_fields)
             
