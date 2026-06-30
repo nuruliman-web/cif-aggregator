@@ -102,29 +102,27 @@ def extract_m4cu(df):
     return result
 
 # ============================================================
-# 5. EKSTRAK M4CUI - DENGAN DEBUG
+# 5. EKSTRAK M4CUI
 # ============================================================
 def extract_m4cui(df, existing_data):
     if df is None or df.empty:
         return existing_data
     
-    # DEBUG: tampilkan di Streamlit
     st.subheader("🔍 DEBUG M4CUI")
     st.write(f"Total baris: {len(df)}, Total kolom: {len(df.columns)}")
     
-    # Tampilkan 5 baris pertama dari semua kolom yang penting
+    # Tampilkan 5 baris pertama
     debug_cols = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 19, 20, 30, 31, 44, 45, 46]
     debug_data = {}
     for col in debug_cols:
         if col < len(df.columns):
-            # Ambil 5 sample
             samples = []
             for i in range(min(5, len(df))):
                 val = str(df.iloc[i, col]).strip()
                 if val and val not in ["", "nan", "None"]:
                     samples.append(val)
             if samples:
-                debug_data[f"Kolom {col}"] = samples[:3]  # Tampilkan max 3
+                debug_data[f"Kolom {col}"] = samples[:3]
     
     if debug_data:
         st.write("📌 Sample data dari kolom-kolom penting:")
@@ -132,7 +130,7 @@ def extract_m4cui(df, existing_data):
     else:
         st.warning("⚠️ Tidak ada data di kolom-kolom yang dicek!")
     
-    # Mapping posisi kolom (berdasarkan header file Excel)
+    # Mapping posisi kolom
     COL_CUCODE = 1
     COL_CUSHOR = 2
     COL_CUPLBR = 5
@@ -213,7 +211,6 @@ def extract_m4cuapu(df, existing_data):
     if df is None or df.empty:
         return existing_data
     
-    # Cari kolom Customer Code
     cu_col = None
     for col in df.columns:
         col_clean = str(col).strip().upper()
@@ -373,21 +370,34 @@ def generate_template(data):
     return df_perorangan, df_badan_usaha
 
 # ============================================================
-# 9. DOWNLOAD EXCEL - PAKAI XLSXWRITER
+# 9. DOWNLOAD EXCEL - PAKAI XLSXWRITER (PRIORITAS)
 # ============================================================
 def to_excel_download(df1, df2):
     output = io.BytesIO()
+    
+    # Coba pake xlsxwriter dulu (lebih ringan, gak ribet)
     try:
-        # Coba pake xlsxwriter (lebih ringan)
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df1.to_excel(writer, sheet_name='Perorangan', index=False)
             df2.to_excel(writer, sheet_name='Badan Usaha', index=False)
-    except:
-        # Fallback ke openpyxl
+        return output.getvalue()
+    except Exception as e:
+        st.warning(f"⚠️ xlsxwriter error: {str(e)[:100]}, coba fallback...")
+    
+    # Fallback ke openpyxl
+    try:
+        output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
             df1.to_excel(writer, sheet_name='Perorangan', index=False)
             df2.to_excel(writer, sheet_name='Badan Usaha', index=False)
-    return output.getvalue()
+        return output.getvalue()
+    except Exception as e:
+        st.error(f"❌ Gagal generate Excel: {str(e)[:200]}")
+        # Return CSV sebagai fallback
+        output = io.BytesIO()
+        combined = pd.concat([df1, df2], ignore_index=True)
+        combined.to_csv(output, index=False)
+        return output.getvalue()
 
 # ============================================================
 # 10. UI
