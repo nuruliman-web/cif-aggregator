@@ -51,7 +51,7 @@ def get_best_value(values, prefer_text=True):
     return str(valid[0])
 
 # ============================================================
-# 4. EKSTRAK M4CU
+# 4. EKSTRAK M4CU (BASE)
 # ============================================================
 def extract_m4cu(df):
     result = {}
@@ -59,7 +59,7 @@ def extract_m4cu(df):
     if df is None or df.empty:
         return result
     
-    # Posisi kolom (0-based)
+    # Posisi kolom M4CU (0-based)
     COL_CUCODE = 1
     COL_CUNAME = 2
     COL_CUFLTY = 31
@@ -103,42 +103,19 @@ def extract_m4cu(df):
     return result
 
 # ============================================================
-# 5. EKSTRAK M4CUI
+# 5. EKSTRAK M4CUI (FIX MAPPING DARI SCREENSHOT)
 # ============================================================
 def extract_m4cui(df, existing_data):
     if df is None or df.empty:
         return existing_data
     
-    # DEBUG
-    st.subheader("🔍 DEBUG M4CUI - Cek Semua Kolom")
-    st.write(f"Total baris: {len(df)}, Total kolom: {len(df.columns)}")
-    
-    # Tampilkan SEMUA kolom yang ada data di 3 baris pertama
-    debug_data = {}
-    for col in range(min(len(df.columns), 50)):  # Cek 50 kolom pertama
-        samples = []
-        for i in range(min(3, len(df))):
-            val = str(df.iloc[i, col]).strip()
-            if val and val not in ["", "nan", "None"]:
-                samples.append(val[:30])  # Potong biar gak kepanjangan
-        if samples:
-            debug_data[f"Kolom {col}"] = samples
-    
-    st.write("📌 Sample 3 baris pertama dari SEMUA kolom yang ada data:")
-    st.json(debug_data)
-    
-    # === MAPPING ULANG POSISI KOLOM ===
-    # Dari debug, kita akan lihat kolom mana yang berisi data
-    COL_CUCODE = 1
-    COL_CUSHOR = 2  # Nama alias / short name
-    COL_CUPLBR = 5  # Tempat lahir
-    COL_CUDTLH = 6  # Tanggal lahir
-    COL_CUIDNO = 19  # NIK
-    COL_CUJEKL = 3  # Jenis kelamin
-    COL_CUMRST = 7  # Status kawin
-    COL_CUFRDN = 45  # Sumber dana
-    COL_CUINCM = 44  # Penghasilan
-    COL_CUTOIC = 46  # Tujuan
+    # MAPPING POSISI KOLOM YANG BENAR (dari screenshot)
+    # Kolom 0 = CIF, 1 = Nama, 2 = JK, 4 = Tempat+Tanggal Lahir, 12 = NIK
+    COL_CUCODE = 0      # CIF
+    COL_CUSHOR = 1      # Nama alias
+    COL_CUJEKL = 2      # Jenis kelamin (L/P)
+    COL_TTL = 4         # Tempat + Tanggal Lahir (contoh: "jakarta 19740506")
+    COL_CUIDNO = 12     # NIK (16 digit)
     
     total_processed = 0
     total_found = 0
@@ -153,53 +130,35 @@ def extract_m4cui(df, existing_data):
         if cif in existing_data:
             total_found += 1
             
-            # Ambil data dari setiap kolom
+            # Nama alias
             if len(row) > COL_CUSHOR:
                 val = str(row[COL_CUSHOR]).strip()
                 if val not in ["", "nan"]:
                     existing_data[cif]["nama"] = get_best_value([existing_data[cif]["nama"], val])
             
-            if len(row) > COL_CUPLBR:
-                val = str(row[COL_CUPLBR]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["tempat_lahir"] = val
-            
-            if len(row) > COL_CUDTLH:
-                val = str(row[COL_CUDTLH]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["tanggal_lahir"] = val
-            
-            if len(row) > COL_CUIDNO:
-                val = str(row[COL_CUIDNO]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["nik"] = val
-            
+            # Jenis Kelamin
             if len(row) > COL_CUJEKL:
                 val = str(row[COL_CUJEKL]).strip()
                 if val not in ["", "nan"]:
                     existing_data[cif]["jk"] = val
             
-            if len(row) > COL_CUMRST:
-                val = str(row[COL_CUMRST]).strip()
+            # Tempat + Tanggal Lahir (format: "kota tgl")
+            if len(row) > COL_TTL:
+                val = str(row[COL_TTL]).strip()
                 if val not in ["", "nan"]:
-                    existing_data[cif]["status_kawin"] = val
+                    # Pisahkan tempat dan tanggal
+                    parts = val.rsplit(" ", 1)
+                    if len(parts) == 2:
+                        existing_data[cif]["tempat_lahir"] = parts[0]
+                        existing_data[cif]["tanggal_lahir"] = parts[1]
+                    else:
+                        existing_data[cif]["tempat_lahir"] = val
             
-            if len(row) > COL_CUFRDN:
-                val = str(row[COL_CUFRDN]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["sumber_dana"] = val
-            
-            if len(row) > COL_CUINCM:
-                val = str(row[COL_CUINCM]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["penghasilan"] = val
-            
-            if len(row) > COL_CUTOIC:
-                val = str(row[COL_CUTOIC]).strip()
-                if val not in ["", "nan"]:
-                    existing_data[cif]["tujuan_usaha"] = val
-    
-    st.write(f"✅ M4CUI: {total_processed} CIF diproses, {total_found} ditemukan di M4CU")
+            # NIK
+            if len(row) > COL_CUIDNO:
+                val = str(row[COL_CUIDNO]).strip()
+                if val not in ["", "nan"] and len(val) >= 16:
+                    existing_data[cif]["nik"] = val
     
     return existing_data
 
@@ -378,7 +337,7 @@ def to_csv_download(df1, df2):
     return output.getvalue()
 
 # ============================================================
-# 10. UI
+# 10. UI UTAMA
 # ============================================================
 uploaded_files = st.file_uploader(
     "Upload file .tab", 
@@ -423,7 +382,7 @@ if uploaded_files:
         
         data = {}
         
-        # 1. M4CU
+        # 1. M4CU (BASE)
         m4cu_key = None
         for key in all_files.keys():
             if key == "M4CU":
