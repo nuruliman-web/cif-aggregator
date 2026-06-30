@@ -341,6 +341,21 @@ if st.session_state.processed_data is not None:
     # Bersihin header hasil gabungan pake alias
     from utils import clean_headers
     cleaned_columns = clean_headers(st.session_state.processed_data.columns.tolist())
+    
+    # Pastikan semua kolom unik
+    if len(cleaned_columns) != len(set(cleaned_columns)):
+        # Kalo masih ada duplikat, paksa unik
+        seen = {}
+        final_columns = []
+        for col in cleaned_columns:
+            if col in seen:
+                seen[col] += 1
+                final_columns.append(f"{col}_{seen[col]}")
+            else:
+                seen[col] = 1
+                final_columns.append(col)
+        cleaned_columns = final_columns
+    
     st.session_state.processed_data.columns = cleaned_columns
     
     st.dataframe(st.session_state.processed_data, use_container_width=True)
