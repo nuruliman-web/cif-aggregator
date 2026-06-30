@@ -12,10 +12,9 @@ st.title("📊 CIF Data Aggregator")
 st.write("Upload file .tab dari core banking untuk digabung datanya")
 
 # ============================================================
-# 2. FUNGSI BACA FILE .tab (TANPA HEADER)
+# 2. FUNGSI BACA FILE .tab
 # ============================================================
 def parse_tab_file(uploaded_file):
-    """Baca file .tab tanpa header (langsung data)"""
     try:
         uploaded_file.seek(0)
         df = pd.read_csv(
@@ -24,7 +23,7 @@ def parse_tab_file(uploaded_file):
             encoding="latin-1", 
             on_bad_lines="skip",
             dtype=str,
-            header=None  # TANPA HEADER!
+            header=None
         )
         df = df.replace(r'^\s*$', '', regex=True)
         df = df.replace(r'^nan$', '', regex=True)
@@ -53,32 +52,30 @@ def get_best_value(values, prefer_text=True):
     return str(valid[0])
 
 # ============================================================
-# 4. EKSTRAK DATA DARI M4CU (PAKAI POSISI KOLOM)
+# 4. EKSTRAK DARI M4CU (PAKAI POSISI KOLOM)
 # ============================================================
 def extract_m4cu(df):
-    """Ekstrak data dari M4CU berdasarkan posisi kolom"""
     result = {}
     
     if df is None or df.empty:
         return result
     
-    # Mapping posisi kolom M4CU (0-based)
-    # Berdasarkan contoh data:
-    # 0: Status, 1: CUCODE, 2: CUNAME, 4-6: Alamat, 7-9: Telepon, 31: CUFLTY
+    # Posisi kolom M4CU (0-based):
+    # 0: Status, 1: CUCODE, 2: CUNAME, 4-6: Alamat, 31: CUFLTY
     COL_CUCODE = 1
     COL_CUNAME = 2
     COL_CUFLTY = 31
-    COL_ALAMAT = [4, 5, 6]  # Alamat 1, Alamat 2, Kota
+    COL_ALAMAT = [4, 5, 6]
+    
+    st.write(f"📌 M4CU: {len(df)} baris, {len(df.columns)} kolom")
+    st.write(f"📌 Kolom 1 (CUCODE) sample: {df[COL_CUCODE].head(5).tolist()}")
     
     for _, row in df.iterrows():
         cif = str(row[COL_CUCODE]).strip()
         if not cif or cif in ["", "nan", "None"]:
             continue
         
-        # Kumpulkan alamat
-        alamat = " ".join([str(row[i]).strip() for i in COL_ALAMAT if str(row[i]).strip() not in ["", "nan"]])
-        
-        # Ambil CUFLTY (posisi 31)
+        alamat = " ".join([str(row[i]).strip() for i in COL_ALAMAT if i < len(row) and str(row[i]).strip() not in ["", "nan"]])
         jenis = str(row[COL_CUFLTY]).strip() if len(row) > COL_CUFLTY else ""
         
         result[cif] = {
@@ -111,79 +108,68 @@ def extract_m4cu(df):
     return result
 
 # ============================================================
-# 5. EKSTRAK DATA DARI M4CUI (PAKAI POSISI KOLOM)
+# 5. EKSTRAK DARI M4CUI
 # ============================================================
 def extract_m4cui(df, existing_data):
-    """Ekstrak data dari M4CUI berdasarkan posisi kolom"""
     if df is None or df.empty:
         return existing_data
     
-    # Mapping posisi kolom M4CUI (berdasarkan contoh header dari file Excel)
-    COL_CUCODE = 1  # Customer code
-    COL_CUSHOR = 2  # Short name
-    COL_CUPLBR = 5  # Place Birth
-    COL_CUDTLH = 6  # Birth date
-    COL_CUIDNO = 19  # ID Number
-    COL_CUJEKL = 3  # Jenis kelamin
-    COL_CUMRST = 7  # Marital Status
-    COL_CUFRDN = 45  # Sumber Dana
-    COL_CUINCM = 44  # Income per Month
-    COL_CUTOIC = 46  # Tujuan Penggunaan
+    COL_CUCODE = 1
+    COL_CUSHOR = 2
+    COL_CUPLBR = 5
+    COL_CUDTLH = 6
+    COL_CUIDNO = 19
+    COL_CUJEKL = 3
+    COL_CUMRST = 7
+    COL_CUFRDN = 45
+    COL_CUINCM = 44
+    COL_CUTOIC = 46
     
     for _, row in df.iterrows():
         cif = str(row[COL_CUCODE]).strip()
         if not cif or cif in ["", "nan", "None"] or cif not in existing_data:
             continue
         
-        # Nama alias (short name)
         if len(row) > COL_CUSHOR:
             val = str(row[COL_CUSHOR]).strip()
             if val not in ["", "nan"]:
                 existing_data[cif]["nama"] = get_best_value([existing_data[cif]["nama"], val])
         
-        # Tempat lahir
         if len(row) > COL_CUPLBR:
             val = str(row[COL_CUPLBR]).strip()
             if val not in ["", "nan"]:
                 existing_data[cif]["tempat_lahir"] = val
         
-        # Tanggal lahir
         if len(row) > COL_CUDTLH:
             val = str(row[COL_CUDTLH]).strip()
             if val not in ["", "nan"]:
                 existing_data[cif]["tanggal_lahir"] = val
         
-        # NIK
         if len(row) > COL_CUIDNO:
             val = str(row[COL_CUIDNO]).strip()
             if val not in ["", "nan"]:
                 existing_data[cif]["nik"] = val
         
-        # Jenis kelamin
         if len(row) > COL_CUJEKL:
             val = str(row[COL_CUJEKL]).strip()
             if val not in ["", "nan"]:
                 existing_data[cif]["jk"] = val
         
-        # Status kawin
         if len(row) > COL_CUMRST:
             val = str(row[COL_CUMRST]).strip()
             if val not in ["", "nan"]:
                 existing_data[cif]["status_kawin"] = val
         
-        # Sumber dana
         if len(row) > COL_CUFRDN:
             val = str(row[COL_CUFRDN]).strip()
             if val not in ["", "nan"]:
                 existing_data[cif]["sumber_dana"] = val
         
-        # Penghasilan
         if len(row) > COL_CUINCM:
             val = str(row[COL_CUINCM]).strip()
             if val not in ["", "nan"]:
                 existing_data[cif]["penghasilan"] = val
         
-        # Tujuan usaha
         if len(row) > COL_CUTOIC:
             val = str(row[COL_CUTOIC]).strip()
             if val not in ["", "nan"]:
@@ -192,41 +178,18 @@ def extract_m4cui(df, existing_data):
     return existing_data
 
 # ============================================================
-# 6. EKSTRAK DATA DARI M4CUAPU
+# 6. EKSTRAK DARI M4CUAPU
 # ============================================================
 def extract_m4cuapu(df, existing_data):
-    """Ekstrak data dari M4CUAPU"""
     if df is None or df.empty:
         return existing_data
     
-    # Cari kolom berdasarkan nama (file M4CUAPU pake header)
     cu_col = None
-    bo_col = None
-    sd_col = None
-    tuj_col = None
-    ph_col = None
-    bu_col = None
-    be_col = None
-    izin_col = None
-    
     for col in df.columns:
         col_clean = str(col).strip().upper()
         if col_clean in ["CUSTOMER CODE", "CUCODE"]:
             cu_col = col
-        elif "BENEFICIAL" in col_clean or "BO" in col_clean:
-            bo_col = col
-        elif "SUMBER DANA" in col_clean:
-            sd_col = col
-        elif "TUJUAN" in col_clean:
-            tuj_col = col
-        elif "PENGHASILAN" in col_clean or "RATA" in col_clean:
-            ph_col = col
-        elif "BIDANG USAHA" in col_clean:
-            bu_col = col
-        elif "BENTUK USAHA" in col_clean:
-            be_col = col
-        elif "IZIN" in col_clean:
-            izin_col = col
+            break
     
     if cu_col is None:
         return existing_data
@@ -236,52 +199,36 @@ def extract_m4cuapu(df, existing_data):
         if not cif or cif in ["", "nan", "None"] or cif not in existing_data:
             continue
         
-        if bo_col is not None:
-            val = str(row[bo_col]).strip()
-            if val not in ["", "nan"]:
+        for col in df.columns:
+            col_clean = str(col).strip().upper()
+            val = str(row[col]).strip()
+            if val in ["", "nan"]:
+                continue
+            
+            if "BENEFICIAL" in col_clean or "BO" in col_clean:
                 existing_data[cif]["bo"] = val
-        
-        if sd_col is not None:
-            val = str(row[sd_col]).strip()
-            if val not in ["", "nan"]:
+            elif "SUMBER DANA" in col_clean:
                 existing_data[cif]["sumber_dana"] = get_best_value([existing_data[cif]["sumber_dana"], val])
-        
-        if tuj_col is not None:
-            val = str(row[tuj_col]).strip()
-            if val not in ["", "nan"]:
+            elif "TUJUAN" in col_clean:
                 existing_data[cif]["tujuan_usaha"] = get_best_value([existing_data[cif]["tujuan_usaha"], val])
-        
-        if ph_col is not None:
-            val = str(row[ph_col]).strip()
-            if val not in ["", "nan"]:
+            elif "PENGHASILAN" in col_clean or "RATA" in col_clean:
                 existing_data[cif]["penghasilan"] = get_best_value([existing_data[cif]["penghasilan"], val])
-        
-        if bu_col is not None:
-            val = str(row[bu_col]).strip()
-            if val not in ["", "nan"]:
+            elif "BIDANG USAHA" in col_clean:
                 existing_data[cif]["bidang_usaha"] = val
-        
-        if be_col is not None:
-            val = str(row[be_col]).strip()
-            if val not in ["", "nan"]:
+            elif "BENTUK USAHA" in col_clean:
                 existing_data[cif]["bentuk_badan"] = val
-        
-        if izin_col is not None:
-            val = str(row[izin_col]).strip()
-            if val not in ["", "nan"]:
+            elif "IZIN" in col_clean or "IJIN" in col_clean:
                 existing_data[cif]["no_izin"] = val
     
     return existing_data
 
 # ============================================================
-# 7. EKSTRAK DATA DARI M4CUC
+# 7. EKSTRAK DARI M4CUC
 # ============================================================
 def extract_m4cuc(df, existing_data):
-    """Ekstrak data dari M4CUC"""
     if df is None or df.empty:
         return existing_data
     
-    # Cari kolom berdasarkan nama
     cu_col = None
     for col in df.columns:
         col_clean = str(col).strip().upper()
@@ -430,8 +377,14 @@ if uploaded_files:
                     elif raw_name.endswith(".txt"):
                         raw_name = raw_name[:-4]
                     key = raw_name.upper()
+                    # Jika key sudah ada, tambahkan suffix
+                    if key in all_files:
+                        counter = 2
+                        while f"{key}_{counter}" in all_files:
+                            counter += 1
+                        key = f"{key}_{counter}"
                     all_files[key] = df
-                    st.write(f"✅ {file.name}: {len(df)} baris, {len(df.columns)} kolom")
+                    st.write(f"✅ {file.name}: {len(df)} baris, {len(df.columns)} kolom → key: {key}")
                 else:
                     st.warning(f"⚠️ {file.name}: Kosong atau tidak terbaca")
             except Exception as e:
@@ -442,38 +395,51 @@ if uploaded_files:
             st.error("❌ Tidak ada data yang bisa diproses.")
             st.stop()
         
+        st.write("📁 File keys:", list(all_files.keys()))
+        
         # EKSTRAK DATA
         data = {}
         
-        # 1. M4CU (BASE)
+        # 1. M4CU (BASE) - cari yang PERSIS M4CU
         m4cu_key = None
         for key in all_files.keys():
-            if "M4CU" in key and "APU" not in key and "UI" not in key and "C" not in key and "G" not in key:
+            if key == "M4CU":
                 m4cu_key = key
                 break
+        
+        # Kalau gak ada yang persis, cari yang mengandung M4CU tapi bukan APU/UI/C/G
+        if m4cu_key is None:
+            for key in all_files.keys():
+                if "M4CU" in key and "APU" not in key and "UI" not in key and "C" not in key and "G" not in key:
+                    m4cu_key = key
+                    break
         
         if m4cu_key:
             st.write(f"✅ Menggunakan M4CU dari key: {m4cu_key}")
             data = extract_m4cu(all_files[m4cu_key])
         else:
             st.error("❌ File M4CU tidak ditemukan!")
+            st.write("Keys yang tersedia:", list(all_files.keys()))
             st.stop()
         
         # 2. M4CUI
         for key in all_files.keys():
             if "M4CUI" in key:
+                st.write(f"✅ Menambahkan data dari: {key}")
                 data = extract_m4cui(all_files[key], data)
                 break
         
         # 3. M4CUAPU
         for key in all_files.keys():
             if "M4CUAPU" in key:
+                st.write(f"✅ Menambahkan data dari: {key}")
                 data = extract_m4cuapu(all_files[key], data)
                 break
         
         # 4. M4CUC
         for key in all_files.keys():
             if "M4CUC" in key:
+                st.write(f"✅ Menambahkan data dari: {key}")
                 data = extract_m4cuc(all_files[key], data)
                 break
         
