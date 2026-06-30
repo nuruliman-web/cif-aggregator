@@ -134,14 +134,29 @@ def get_alias(header_name):
     return header_name
 
 def clean_headers(headers):
-    """Bersihin header jadi user friendly"""
+    """
+    Bersihin header jadi user friendly dan PASTIKAN UNIK
+    """
     cleaned = []
+    seen = {}
+    
     for h in headers:
+        # Dapatkan alias
         alias = get_alias(h)
+        
         # Hapus prefix file name yang mungkin kelebihan
         if "_" in alias:
             parts = alias.split("_")
             if len(parts) > 1 and parts[-1] in HEADER_ALIAS.values():
                 alias = parts[-1]
+        
+        # Pastikan unik
+        if alias in seen:
+            seen[alias] += 1
+            alias = f"{alias}_{seen[alias]}"
+        else:
+            seen[alias] = 1
+        
         cleaned.append(alias)
+    
     return cleaned
