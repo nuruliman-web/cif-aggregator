@@ -12,10 +12,10 @@ st.title("📊 CIF Data Aggregator")
 st.write("Upload file .tab dari core banking untuk digabung datanya")
 
 # ============================================================
-# 2. FUNGSI BACA FILE .tab (TAB-DELIMITED)
+# 2. FUNGSI BACA FILE .tab (TANPA HEADER)
 # ============================================================
 def parse_tab_file(uploaded_file):
-    """Baca file .tab yang berformat TAB-delimited"""
+    """Baca file .tab tanpa header (langsung data)"""
     try:
         uploaded_file.seek(0)
         df = pd.read_csv(
@@ -23,7 +23,8 @@ def parse_tab_file(uploaded_file):
             sep="\t", 
             encoding="latin-1", 
             on_bad_lines="skip",
-            dtype=str
+            dtype=str,
+            header=None  # TANPA HEADER!
         )
         df = df.replace(r'^\s*$', '', regex=True)
         df = df.replace(r'^nan$', '', regex=True)
@@ -33,99 +34,57 @@ def parse_tab_file(uploaded_file):
         return None
 
 # ============================================================
-# 3. FUNGSI CARI KOLOM
-# ============================================================
-def find_column(df, possible_names):
-    """Cari kolom di dataframe berdasarkan kemungkinan nama"""
-    if df is None or df.empty:
-        return None
-    for col in df.columns:
-        col_clean = col.strip().upper()
-        for name in possible_names:
-            if col_clean == name.upper():
-                return col
-            if name.upper() in col_clean:
-                return col
-    return None
-
-# ============================================================
-# 4. FUNGSI GET BEST VALUE
+# 3. GET BEST VALUE
 # ============================================================
 def get_best_value(values, prefer_text=True):
-    """Pilih nilai terbaik dari beberapa sumber"""
     valid = []
     for v in values:
         v_str = str(v).strip()
         if v_str and v_str not in ["", "nan", "None", "-", "0", "0000", "NULL"]:
             valid.append(v_str)
-    
     if not valid:
         return "-"
-    
     if prefer_text:
         text_values = [v for v in valid if re.search(r'[A-Za-z]', str(v))]
         if text_values:
             return max(text_values, key=lambda x: len(str(x)))
         else:
             return str(valid[0])
-    else:
-        return str(valid[0])
+    return str(valid[0])
 
 # ============================================================
-# 5. FUNGSI EKSTRAK DATA PER CIF
+# 4. EKSTRAK DATA DARI M4CU (PAKAI POSISI KOLOM)
 # ============================================================
-def extract_cif_data(all_files):
-    """Ekstrak data per CIF dari semua file yang diupload"""
+def extract_m4cu(df):
+    """Ekstrak data dari M4CU berdasarkan posisi kolom"""
     result = {}
     
-    # Debug: tampilkan nama file yang tersedia
-    st.write("📁 File yang terdeteksi:", list(all_files.keys()))
-    
-    # ============================================================
-    # 5a. AMBIL BASE DARI M4CU
-    # ============================================================
-    m4cu = None
-    for key in all_files.keys():
-        if "M4CU" in key.upper():
-            m4cu = all_files[key]
-            st.write(f"✅ M4CU ditemukan di key: {key}")
-            break
-    
-    if m4cu is None or m4cu.empty:
-        st.error("❌ File M4CU tidak ditemukan!")
+    if df is None or df.empty:
         return result
     
-    cu_col = find_column(m4cu, ["CUCODE", "CUSTOMER CODE"])
-    name_col = find_column(m4cu, ["CUNAME", "CUSTOMER NAME"])
-    type_col = find_column(m4cu, ["CUFLTY", "CUSTOMER TYPE"])
+    # Mapping posisi kolom M4CU (0-based)
+    # Berdasarkan contoh data:
+    # 0: Status, 1: CUCODE, 2: CUNAME, 4-6: Alamat, 7-9: Telepon, 31: CUFLTY
+    COL_CUCODE = 1
+    COL_CUNAME = 2
+    COL_CUFLTY = 31
+    COL_ALAMAT = [4, 5, 6]  # Alamat 1, Alamat 2, Kota
     
-    addr_cols = []
-    for col in m4cu.columns:
-        col_clean = col.strip().upper()
-        if col_clean.startswith("CUADR") or "ADDRESS" in col_clean:
-            addr_cols.append(col)
-    
-    if cu_col is None:
-        st.error("❌ Kolom CUCODE tidak ditemukan di M4CU!")
-        st.write("Kolom yang tersedia:", list(m4cu.columns))
-        return result
-    
-    st.write(f"✅ Kolom CUCODE: {cu_col}")
-    st.write(f"✅ Kolom CUNAME: {name_col}")
-    st.write(f"✅ Kolom CUFLTY: {type_col}")
-    
-    for _, row in m4cu.iterrows():
-        cif = str(row[cu_col]).strip()
+    for _, row in df.iterrows():
+        cif = str(row[COL_CUCODE]).strip()
         if not cif or cif in ["", "nan", "None"]:
             continue
-            
-        alamat = " ".join([str(row[c]).strip() for c in addr_cols if str(row[c]).strip() not in ["", "nan"]])
+        
+        # Kumpulkan alamat
+        alamat = " ".join([str(row[i]).strip() for i in COL_ALAMAT if str(row[i]).strip() not in ["", "nan"]])
+        
+        # Ambil CUFLTY (posisi 31)
+        jenis = str(row[COL_CUFLTY]).strip() if len(row) > COL_CUFLTY else ""
         
         result[cif] = {
-            "sources": ["M4CU"],
             "cif": cif,
-            "nama": get_best_value([row[name_col]] if name_col else ["-"]),
-            "jenis_nasabah": str(row[type_col]).strip() if type_col and str(row[type_col]).strip() not in ["", "nan"] else "",
+            "nama": str(row[COL_CUNAME]).strip() if len(row) > COL_CUNAME else "-",
+            "jenis_nasabah": jenis if jenis not in ["", "nan"] else "",
             "alamat": alamat if alamat else "-",
             "pekerjaan": "-",
             "tempat_lahir": "-",
@@ -149,145 +108,216 @@ def extract_cif_data(all_files):
             "bentuk_badan": "-"
         }
     
-    # ============================================================
-    # 5b. TAMBAH DATA DARI M4CUI
-    # ============================================================
-    m4cui = None
-    for key in all_files.keys():
-        if "M4CUI" in key.upper():
-            m4cui = all_files[key]
-            break
-    
-    if m4cui is not None and not m4cui.empty:
-        cu_col = find_column(m4cui, ["CUCODE", "CUSTOMER CODE"])
-        if cu_col is not None:
-            for _, row in m4cui.iterrows():
-                cif = str(row[cu_col]).strip()
-                if cif not in result:
-                    continue
-                
-                for col, field in [
-                    ("CUSHOR", "nama"),
-                    ("CUPLBR", "tempat_lahir"),
-                    ("CUDTLH", "tanggal_lahir"),
-                    ("CUIDNO", "nik"),
-                    ("CUJEKL", "jk"),
-                    ("CUCTZC", "kewarganegaraan"),
-                    ("CUMRST", "status_kawin"),
-                    ("CUIKRJ", "pekerjaan"),
-                    ("CUFRDN", "sumber_dana"),
-                    ("CUINCM", "penghasilan"),
-                    ("CUTOIC", "tujuan_usaha")
-                ]:
-                    if col in row:
-                        val = str(row[col]).strip()
-                        if val not in ["", "nan"]:
-                            result[cif][field] = get_best_value([result[cif][field], val])
-    
-    # ============================================================
-    # 5c. TAMBAH DATA DARI M4CUAPU
-    # ============================================================
-    m4cuapu = None
-    for key in all_files.keys():
-        if "M4CUAPU" in key.upper():
-            m4cuapu = all_files[key]
-            break
-    
-    if m4cuapu is not None and not m4cuapu.empty:
-        cu_col = find_column(m4cuapu, ["CUSTOMER CODE", "CUCODE"])
-        if cu_col is not None:
-            for _, row in m4cuapu.iterrows():
-                cif = str(row[cu_col]).strip()
-                if cif not in result:
-                    continue
-                
-                bo_col = find_column(m4cuapu, ["Beneficiary Owner", "BO"])
-                if bo_col is not None:
-                    val = str(row[bo_col]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["bo"] = val
-                
-                sd_col = find_column(m4cuapu, ["Sumber Dana"])
-                if sd_col is not None:
-                    val = str(row[sd_col]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["sumber_dana"] = get_best_value([result[cif]["sumber_dana"], val])
-                
-                tuj_col = find_column(m4cuapu, ["Tujuan Penggunaan Dana", "Tujuan Dana"])
-                if tuj_col is not None:
-                    val = str(row[tuj_col]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["tujuan_usaha"] = get_best_value([result[cif]["tujuan_usaha"], val])
-                
-                ph_col = find_column(m4cuapu, ["Rata-Rata Penghasilan", "Penghasilan"])
-                if ph_col is not None:
-                    val = str(row[ph_col]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["penghasilan"] = get_best_value([result[cif]["penghasilan"], val])
-                
-                bu_col = find_column(m4cuapu, ["Bidang Usaha"])
-                if bu_col is not None:
-                    val = str(row[bu_col]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["bidang_usaha"] = val
-                
-                be_col = find_column(m4cuapu, ["Bentuk Usaha"])
-                if be_col is not None:
-                    val = str(row[be_col]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["bentuk_badan"] = val
-                
-                izin_col = find_column(m4cuapu, ["No. Izin Usaha", "Nomor Izin Usaha"])
-                if izin_col is not None:
-                    val = str(row[izin_col]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["no_izin"] = val
-    
-    # ============================================================
-    # 5d. TAMBAH DATA DARI M4CUC
-    # ============================================================
-    m4cuc = None
-    for key in all_files.keys():
-        if "M4CUC" in key.upper():
-            m4cuc = all_files[key]
-            break
-    
-    if m4cuc is not None and not m4cuc.empty:
-        cu_col = find_column(m4cuc, ["CIF", "CUCODE", "CUSTOMER CODE"])
-        if cu_col is not None:
-            for _, row in m4cuc.iterrows():
-                cif = str(row[cu_col]).strip()
-                if cif not in result:
-                    continue
-                
-                if "Bidang Usaha" in row:
-                    val = str(row["Bidang Usaha"]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["bidang_usaha"] = get_best_value([result[cif]["bidang_usaha"], val])
-                
-                if "Bentuk Usaha" in row:
-                    val = str(row["Bentuk Usaha"]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["bentuk_badan"] = get_best_value([result[cif]["bentuk_badan"], val])
-                
-                if "Nomor Ijin Usaha" in row:
-                    val = str(row["Nomor Ijin Usaha"]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["no_izin"] = get_best_value([result[cif]["no_izin"], val])
-                
-                if "Tanggal Berdiri" in row:
-                    val = str(row["Tanggal Berdiri"]).strip()
-                    if val not in ["", "nan"]:
-                        result[cif]["tanggal_pendirian"] = val
-    
     return result
 
 # ============================================================
-# 6. FUNGSI GENERATE TEMPLATE
+# 5. EKSTRAK DATA DARI M4CUI (PAKAI POSISI KOLOM)
+# ============================================================
+def extract_m4cui(df, existing_data):
+    """Ekstrak data dari M4CUI berdasarkan posisi kolom"""
+    if df is None or df.empty:
+        return existing_data
+    
+    # Mapping posisi kolom M4CUI (berdasarkan contoh header dari file Excel)
+    COL_CUCODE = 1  # Customer code
+    COL_CUSHOR = 2  # Short name
+    COL_CUPLBR = 5  # Place Birth
+    COL_CUDTLH = 6  # Birth date
+    COL_CUIDNO = 19  # ID Number
+    COL_CUJEKL = 3  # Jenis kelamin
+    COL_CUMRST = 7  # Marital Status
+    COL_CUFRDN = 45  # Sumber Dana
+    COL_CUINCM = 44  # Income per Month
+    COL_CUTOIC = 46  # Tujuan Penggunaan
+    
+    for _, row in df.iterrows():
+        cif = str(row[COL_CUCODE]).strip()
+        if not cif or cif in ["", "nan", "None"] or cif not in existing_data:
+            continue
+        
+        # Nama alias (short name)
+        if len(row) > COL_CUSHOR:
+            val = str(row[COL_CUSHOR]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["nama"] = get_best_value([existing_data[cif]["nama"], val])
+        
+        # Tempat lahir
+        if len(row) > COL_CUPLBR:
+            val = str(row[COL_CUPLBR]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["tempat_lahir"] = val
+        
+        # Tanggal lahir
+        if len(row) > COL_CUDTLH:
+            val = str(row[COL_CUDTLH]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["tanggal_lahir"] = val
+        
+        # NIK
+        if len(row) > COL_CUIDNO:
+            val = str(row[COL_CUIDNO]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["nik"] = val
+        
+        # Jenis kelamin
+        if len(row) > COL_CUJEKL:
+            val = str(row[COL_CUJEKL]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["jk"] = val
+        
+        # Status kawin
+        if len(row) > COL_CUMRST:
+            val = str(row[COL_CUMRST]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["status_kawin"] = val
+        
+        # Sumber dana
+        if len(row) > COL_CUFRDN:
+            val = str(row[COL_CUFRDN]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["sumber_dana"] = val
+        
+        # Penghasilan
+        if len(row) > COL_CUINCM:
+            val = str(row[COL_CUINCM]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["penghasilan"] = val
+        
+        # Tujuan usaha
+        if len(row) > COL_CUTOIC:
+            val = str(row[COL_CUTOIC]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["tujuan_usaha"] = val
+    
+    return existing_data
+
+# ============================================================
+# 6. EKSTRAK DATA DARI M4CUAPU
+# ============================================================
+def extract_m4cuapu(df, existing_data):
+    """Ekstrak data dari M4CUAPU"""
+    if df is None or df.empty:
+        return existing_data
+    
+    # Cari kolom berdasarkan nama (file M4CUAPU pake header)
+    cu_col = None
+    bo_col = None
+    sd_col = None
+    tuj_col = None
+    ph_col = None
+    bu_col = None
+    be_col = None
+    izin_col = None
+    
+    for col in df.columns:
+        col_clean = str(col).strip().upper()
+        if col_clean in ["CUSTOMER CODE", "CUCODE"]:
+            cu_col = col
+        elif "BENEFICIAL" in col_clean or "BO" in col_clean:
+            bo_col = col
+        elif "SUMBER DANA" in col_clean:
+            sd_col = col
+        elif "TUJUAN" in col_clean:
+            tuj_col = col
+        elif "PENGHASILAN" in col_clean or "RATA" in col_clean:
+            ph_col = col
+        elif "BIDANG USAHA" in col_clean:
+            bu_col = col
+        elif "BENTUK USAHA" in col_clean:
+            be_col = col
+        elif "IZIN" in col_clean:
+            izin_col = col
+    
+    if cu_col is None:
+        return existing_data
+    
+    for _, row in df.iterrows():
+        cif = str(row[cu_col]).strip()
+        if not cif or cif in ["", "nan", "None"] or cif not in existing_data:
+            continue
+        
+        if bo_col is not None:
+            val = str(row[bo_col]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["bo"] = val
+        
+        if sd_col is not None:
+            val = str(row[sd_col]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["sumber_dana"] = get_best_value([existing_data[cif]["sumber_dana"], val])
+        
+        if tuj_col is not None:
+            val = str(row[tuj_col]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["tujuan_usaha"] = get_best_value([existing_data[cif]["tujuan_usaha"], val])
+        
+        if ph_col is not None:
+            val = str(row[ph_col]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["penghasilan"] = get_best_value([existing_data[cif]["penghasilan"], val])
+        
+        if bu_col is not None:
+            val = str(row[bu_col]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["bidang_usaha"] = val
+        
+        if be_col is not None:
+            val = str(row[be_col]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["bentuk_badan"] = val
+        
+        if izin_col is not None:
+            val = str(row[izin_col]).strip()
+            if val not in ["", "nan"]:
+                existing_data[cif]["no_izin"] = val
+    
+    return existing_data
+
+# ============================================================
+# 7. EKSTRAK DATA DARI M4CUC
+# ============================================================
+def extract_m4cuc(df, existing_data):
+    """Ekstrak data dari M4CUC"""
+    if df is None or df.empty:
+        return existing_data
+    
+    # Cari kolom berdasarkan nama
+    cu_col = None
+    for col in df.columns:
+        col_clean = str(col).strip().upper()
+        if col_clean in ["CIF", "CUCODE", "CUSTOMER CODE"]:
+            cu_col = col
+            break
+    
+    if cu_col is None:
+        return existing_data
+    
+    for _, row in df.iterrows():
+        cif = str(row[cu_col]).strip()
+        if not cif or cif in ["", "nan", "None"] or cif not in existing_data:
+            continue
+        
+        for col in df.columns:
+            col_clean = str(col).strip().upper()
+            val = str(row[col]).strip()
+            if val in ["", "nan"]:
+                continue
+            
+            if "BIDANG USAHA" in col_clean:
+                existing_data[cif]["bidang_usaha"] = get_best_value([existing_data[cif]["bidang_usaha"], val])
+            elif "BENTUK USAHA" in col_clean:
+                existing_data[cif]["bentuk_badan"] = get_best_value([existing_data[cif]["bentuk_badan"], val])
+            elif "IZIN" in col_clean or "IJIN" in col_clean:
+                existing_data[cif]["no_izin"] = get_best_value([existing_data[cif]["no_izin"], val])
+            elif "TANGGAL BERDIRI" in col_clean:
+                existing_data[cif]["tanggal_pendirian"] = val
+    
+    return existing_data
+
+# ============================================================
+# 8. GENERATE TEMPLATE
 # ============================================================
 def generate_template(data):
-    """Generate 2 sheet: Perorangan dan Badan Usaha"""
-    
     perorangan_rows = []
     badan_usaha_rows = []
     
@@ -366,7 +396,7 @@ def generate_template(data):
     return df_perorangan, df_badan_usaha
 
 # ============================================================
-# 7. FUNGSI DOWNLOAD EXCEL
+# 9. DOWNLOAD EXCEL
 # ============================================================
 def to_excel_download(df1, df2):
     output = io.BytesIO()
@@ -376,7 +406,7 @@ def to_excel_download(df1, df2):
     return output.getvalue()
 
 # ============================================================
-# 8. UI UTAMA
+# 10. UI UTAMA
 # ============================================================
 uploaded_files = st.file_uploader(
     "Upload file .tab", 
@@ -394,7 +424,6 @@ if uploaded_files:
             try:
                 df = parse_tab_file(file)
                 if df is not None and not df.empty:
-                    # Ambil nama file tanpa ekstensi
                     raw_name = file.name
                     if raw_name.endswith(".tab"):
                         raw_name = raw_name[:-4]
@@ -413,14 +442,45 @@ if uploaded_files:
             st.error("❌ Tidak ada data yang bisa diproses.")
             st.stop()
         
-        # Ekstrak data per CIF
-        data = extract_cif_data(all_files)
+        # EKSTRAK DATA
+        data = {}
         
-        if not data:
-            st.error("❌ Tidak ada CIF ditemukan. Pastikan file M4CU ada.")
+        # 1. M4CU (BASE)
+        m4cu_key = None
+        for key in all_files.keys():
+            if "M4CU" in key and "APU" not in key and "UI" not in key and "C" not in key and "G" not in key:
+                m4cu_key = key
+                break
+        
+        if m4cu_key:
+            st.write(f"✅ Menggunakan M4CU dari key: {m4cu_key}")
+            data = extract_m4cu(all_files[m4cu_key])
+        else:
+            st.error("❌ File M4CU tidak ditemukan!")
             st.stop()
         
-        # Generate template
+        # 2. M4CUI
+        for key in all_files.keys():
+            if "M4CUI" in key:
+                data = extract_m4cui(all_files[key], data)
+                break
+        
+        # 3. M4CUAPU
+        for key in all_files.keys():
+            if "M4CUAPU" in key:
+                data = extract_m4cuapu(all_files[key], data)
+                break
+        
+        # 4. M4CUC
+        for key in all_files.keys():
+            if "M4CUC" in key:
+                data = extract_m4cuc(all_files[key], data)
+                break
+        
+        if not data:
+            st.error("❌ Tidak ada CIF ditemukan.")
+            st.stop()
+        
         df_perorangan, df_badan_usaha = generate_template(data)
     
     st.success(f"✅ Data berhasil diproses! {len(data)} CIF ditemukan")
