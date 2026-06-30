@@ -59,6 +59,7 @@ def extract_m4cu(df):
     if df is None or df.empty:
         return result
     
+    # Posisi kolom (0-based)
     COL_CUCODE = 1
     COL_CUNAME = 2
     COL_CUFLTY = 31
@@ -108,39 +109,36 @@ def extract_m4cui(df, existing_data):
     if df is None or df.empty:
         return existing_data
     
-    st.subheader("🔍 DEBUG M4CUI")
+    # DEBUG
+    st.subheader("🔍 DEBUG M4CUI - Cek Semua Kolom")
     st.write(f"Total baris: {len(df)}, Total kolom: {len(df.columns)}")
     
-    # Tampilkan 5 baris pertama
-    debug_cols = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 19, 20, 30, 31, 44, 45, 46]
+    # Tampilkan SEMUA kolom yang ada data di 3 baris pertama
     debug_data = {}
-    for col in debug_cols:
-        if col < len(df.columns):
-            samples = []
-            for i in range(min(5, len(df))):
-                val = str(df.iloc[i, col]).strip()
-                if val and val not in ["", "nan", "None"]:
-                    samples.append(val)
-            if samples:
-                debug_data[f"Kolom {col}"] = samples[:3]
+    for col in range(min(len(df.columns), 50)):  # Cek 50 kolom pertama
+        samples = []
+        for i in range(min(3, len(df))):
+            val = str(df.iloc[i, col]).strip()
+            if val and val not in ["", "nan", "None"]:
+                samples.append(val[:30])  # Potong biar gak kepanjangan
+        if samples:
+            debug_data[f"Kolom {col}"] = samples
     
-    if debug_data:
-        st.write("📌 Sample data dari kolom-kolom penting:")
-        st.json(debug_data)
-    else:
-        st.warning("⚠️ Tidak ada data di kolom-kolom yang dicek!")
+    st.write("📌 Sample 3 baris pertama dari SEMUA kolom yang ada data:")
+    st.json(debug_data)
     
-    # Mapping posisi kolom
+    # === MAPPING ULANG POSISI KOLOM ===
+    # Dari debug, kita akan lihat kolom mana yang berisi data
     COL_CUCODE = 1
-    COL_CUSHOR = 2
-    COL_CUPLBR = 5
-    COL_CUDTLH = 6
-    COL_CUIDNO = 19
-    COL_CUJEKL = 3
-    COL_CUMRST = 7
-    COL_CUFRDN = 45
-    COL_CUINCM = 44
-    COL_CUTOIC = 46
+    COL_CUSHOR = 2  # Nama alias / short name
+    COL_CUPLBR = 5  # Tempat lahir
+    COL_CUDTLH = 6  # Tanggal lahir
+    COL_CUIDNO = 19  # NIK
+    COL_CUJEKL = 3  # Jenis kelamin
+    COL_CUMRST = 7  # Status kawin
+    COL_CUFRDN = 45  # Sumber dana
+    COL_CUINCM = 44  # Penghasilan
+    COL_CUTOIC = 46  # Tujuan
     
     total_processed = 0
     total_found = 0
@@ -155,6 +153,7 @@ def extract_m4cui(df, existing_data):
         if cif in existing_data:
             total_found += 1
             
+            # Ambil data dari setiap kolom
             if len(row) > COL_CUSHOR:
                 val = str(row[COL_CUSHOR]).strip()
                 if val not in ["", "nan"]:
@@ -370,34 +369,13 @@ def generate_template(data):
     return df_perorangan, df_badan_usaha
 
 # ============================================================
-# 9. DOWNLOAD EXCEL - PAKAI XLSXWRITER (PRIORITAS)
+# 9. DOWNLOAD CSV
 # ============================================================
-def to_excel_download(df1, df2):
+def to_csv_download(df1, df2):
     output = io.BytesIO()
-    
-    # Coba pake xlsxwriter dulu (lebih ringan, gak ribet)
-    try:
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df1.to_excel(writer, sheet_name='Perorangan', index=False)
-            df2.to_excel(writer, sheet_name='Badan Usaha', index=False)
-        return output.getvalue()
-    except Exception as e:
-        st.warning(f"⚠️ xlsxwriter error: {str(e)[:100]}, coba fallback...")
-    
-    # Fallback ke openpyxl
-    try:
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df1.to_excel(writer, sheet_name='Perorangan', index=False)
-            df2.to_excel(writer, sheet_name='Badan Usaha', index=False)
-        return output.getvalue()
-    except Exception as e:
-        st.error(f"❌ Gagal generate Excel: {str(e)[:200]}")
-        # Return CSV sebagai fallback
-        output = io.BytesIO()
-        combined = pd.concat([df1, df2], ignore_index=True)
-        combined.to_csv(output, index=False)
-        return output.getvalue()
+    combined = pd.concat([df1, df2], ignore_index=True)
+    combined.to_csv(output, index=False)
+    return output.getvalue()
 
 # ============================================================
 # 10. UI
@@ -510,10 +488,10 @@ if uploaded_files:
             st.info("Tidak ada data Badan Usaha")
     
     if not df_perorangan.empty or not df_badan_usaha.empty:
-        excel_data = to_excel_download(df_perorangan, df_badan_usaha)
+        csv_data = to_csv_download(df_perorangan, df_badan_usaha)
         st.download_button(
-            label="📥 Download Excel",
-            data=excel_data,
-            file_name="CIF_Data_Aggregator.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            label="📥 Download CSV",
+            data=csv_data,
+            file_name="CIF_Data_Aggregator.csv",
+            mime="text/csv"
         )
