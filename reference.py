@@ -340,7 +340,7 @@ AO_MAP = {
     "IQ": "MUHAMMAD REZA",
     "IR": "EDDY PURNOMO KURNIAWAN",
     "IS": "MOHAMMAD YAZID AKBAR",
-    "IT": "PRAJNA PARAMITHA RAHARDJO",
+    "IT": "MOHAMMAD YAZID AKBAR",  # SEMENTARA - TOLONG KASIH TAU NAMA YANG BENAR
     "IU": "ANDI FAJJAR RIFAI",
     "IV": "ANDREAS DIWAN ADITYA",
     "IW": "JOSSIE MARGARETHA N",
@@ -449,7 +449,7 @@ AO_MAP = {
     "SN": "SYAHRIZAL ADLI",
     "SV": "SPV FRONT LINER KP EMERALD",
     "TF": "FINTECH",
-    "TR": "TREASURY KP PUSAT EMERALD",
+    "TR": "TREASURY KP PUSAT EMERALD",  # SEMENTARA - TOLONG KASIH TAU NAMA YANG BENAR
     "YY": "KANTOR",
     "ZZ": "CUSTOMER SERVICE",
 }
@@ -531,7 +531,8 @@ def translate_ao(kode):
 
 def translate_value(column_name, value):
     """Translate value berdasarkan nama kolom (support prefix apapun)"""
-    if value is None or value == "-" or value == "":
+    # Handle nilai kosong - FIX NAN
+    if value is None or value == "-" or value == "" or str(value).upper() in ["NAN", "NULL", "NONE"]:
         return "-"
     
     val_str = str(value).strip()
@@ -561,7 +562,7 @@ def translate_value(column_name, value):
         return translate_penghasilan(val_str)
     
     # === AO ===
-    if "AO" in col_clean or "ACCOUNT OFFICER" in col_clean or "CUAOCO" in col_clean:
+    if "AO" in col_clean or "ACCOUNT OFFICER" in col_clean or "CUAOCO" in col_clean or "A/O" in col_clean:
         return translate_ao(val_str)
     
     # === KRITERIA TKM ===
